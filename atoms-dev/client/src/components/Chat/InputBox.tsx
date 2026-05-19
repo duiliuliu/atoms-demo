@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { Send, Paperclip } from 'lucide-react';
 import { useChatStore } from '@/stores';
+import { Tooltip } from '@/components/Layout/Tooltip';
 
 export const InputBox: React.FC = () => {
   const [input, setInput] = useState('');
@@ -27,14 +28,15 @@ export const InputBox: React.FC = () => {
 
   return (
     <form onSubmit={handleSubmit} className="flex gap-3">
-      <button
-        type="button"
-        className="p-3 rounded-xl bg-bg-secondary hover:bg-bg-tertiary transition"
-        title="添加文件（暂不支持）"
-        disabled
-      >
-        <Paperclip className="w-5 h-5 text-text-secondary" />
-      </button>
+      <Tooltip text="添加文件（暂不支持）">
+        <button
+          type="button"
+          className="p-3 rounded-xl bg-bg-secondary hover:bg-bg-tertiary transition cursor-not-allowed opacity-50"
+          disabled
+        >
+          <Paperclip className="w-5 h-5 text-text-secondary" />
+        </button>
+      </Tooltip>
 
       <input
         type="text"
