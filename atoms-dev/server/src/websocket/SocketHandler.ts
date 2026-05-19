@@ -91,6 +91,11 @@ export class SocketHandler {
           let sandboxId = socket.data.sandboxId;
           let projectId = socket.data.projectId;
 
+          // 添加用户消息到记忆
+          if (projectId) {
+            await this.memoryManager.addUserMessage(projectId, userId, content);
+          }
+
           // 意图分类
           const intentResult = await this.intentHandler.handle(content);
 
@@ -109,6 +114,10 @@ export class SocketHandler {
             // 直接回答
             if (intentResult.content) {
               socket.emit('chat:chunk', { content: intentResult.content });
+              // 添加助手消息到记忆
+              if (projectId) {
+                await this.memoryManager.addAssistantMessage(projectId, intentResult.content);
+              }
             }
             socket.emit('chat:end', {});
           }
@@ -143,7 +152,12 @@ export class SocketHandler {
           // 执行请求
           const stream = await this.agentService.processRequest(
             taskBreakdown.userIntent.originalRequest,
-            { sandboxId, files }
+            { 
+              sandboxId, 
+              files,
+              projectId,
+              userId
+            }
           );
 
           for await (const chunk of stream) {
@@ -267,6 +281,10 @@ export class SocketHandler {
     
     this.agentService.on('error', (data: { message: string }) => {
       socket.emit('agent:error', data);
+    });
+    
+    this.agentService.on('auto_preview', (data: { sandboxId: string; previewUrl: string; entryFile: string }) => {
+      socket.emit('preview:auto', data);
     });
   }
   

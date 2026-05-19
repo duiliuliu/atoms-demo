@@ -9,13 +9,13 @@ export class IntentHandler {
   private llmService: LLMService;
 
   constructor(llmService: LLMService) {
-    this.classifier = new IntentClassifier();
+    this.classifier = new IntentClassifier(llmService);
     this.taskAnalyzer = new TaskAnalyzer(llmService);
     this.llmService = llmService;
   }
 
   async handle(input: string): Promise<IntentResponse> {
-    const classification = this.classifier.classify(input);
+    const classification = await this.classifier.classifyWithAI(input);
 
     switch (classification.type) {
       case 'question':

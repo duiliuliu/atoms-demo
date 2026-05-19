@@ -360,6 +360,11 @@ export function initSocket(): Socket {
     useProjectStore.getState().setPreviewUrl(data.url);
   });
   
+  socket.on('preview:auto', (data: { sandboxId: string; previewUrl: string; entryFile: string }) => {
+    useProjectStore.getState().setPreviewUrl(data.previewUrl);
+    useUIStore.getState().setActiveTab('preview');
+  });
+  
   socket.on('agent:command', (data: { command: string }) => {
     useTerminalStore.getState().addLine({
       type: 'command',

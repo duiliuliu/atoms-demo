@@ -1,4 +1,5 @@
 import type { IntentType, IntentClassification } from '../types/intent.js';
+import type { LLMService } from './llm/LLMService.js';
 
 interface ClassifierRule {
   type: IntentType;
@@ -8,6 +9,12 @@ interface ClassifierRule {
 }
 
 export class IntentClassifier {
+  private llmService?: LLMService;
+  
+  constructor(llmService?: LLMService) {
+    this.llmService = llmService;
+  }
+  
   private rules: ClassifierRule[] = [
     {
       type: 'question',
@@ -148,5 +155,57 @@ export class IntentClassifier {
 
     const shortInput = input.length > 50 ? input.substring(0, 50) + '...' : input;
     return `${descriptions[type]}: ${shortInput}`;
+  }
+
+  async classifyWithAI(input: string): Promise<IntentClassification> {
+    // First use rule-based classification
+    const ruleResult = this.classify(input);
+    
+    // If rule-based is confident, return it immediately
+    if (ruleResult.confidence >= 0.6) {
+      return ruleResult;
+    }
+    
+    // If no LLM service, fall back to rule-based
+    if (!this.llmService) {
+      return ruleResult;
+    }
+    
+    // Try AI-based classification for ambiguous cases
+    try {
+      const intentTypes = ['question', 'code_production', 'text_generation', 
+                         'document_generation', 'refactor', 'debug', 'consultation'];
+      
+      const prompt = `You are an intent classifier. Analyze the user's input and classify it into one of these types:
+${intentTypes.map((t, i) => `${i+1}. ${t}`).join('\n')}
+
+Respond with ONLY the type name, no other text.
+
+User input: ${input}`;
+
+      const formattedPrompt = `${prompt}\n\n${input}`;
+      const response = await this.llmService.complete(formattedPrompt);
+      
+      const aiType = response.content?.trim().toLowerCase() || '';
+      
+      if (intentTypes.includes(aiType as IntentType)) {
+        const rule = this.rules.find(r => r.type === aiType);
+        const keywords = this.extractKeywords(input);
+        
+        return {
+          type: aiType as IntentType,
+          confidence: 0.8,
+          requiresTaskBreakdown: rule?.requiresTaskBreakdown || false,
+          requiresConfirmation: rule?.requiresConfirmation || false,
+          summary: this.generateSummary(input, aiType as IntentType),
+          keywords
+        };
+      }
+    } catch (error) {
+      // If AI fails, fall back to rule-based
+      console.warn('AI classification failed, falling back to rule-based:', error);
+    }
+    
+    return ruleResult;
   }
 }
