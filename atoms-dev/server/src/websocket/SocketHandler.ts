@@ -91,10 +91,22 @@ export class SocketHandler {
           let sandboxId = socket.data.sandboxId;
           let projectId = socket.data.projectId;
 
-          // 添加用户消息到记忆
-          if (projectId) {
-            await this.memoryManager.addUserMessage(projectId, userId, content);
+          // 自动创建项目（如果没有项目）
+          if (!projectId) {
+            console.log(`[Socket] Auto-creating project for user: ${userId}`);
+            const project = await this.projectManager.createProject(userId, '新项目');
+            projectId = project.id;
+            socket.data.projectId = projectId;
+            socket.data.userId = userId;
+            
+            // 同时创建记忆
+            await this.memoryManager.createProjectMemory(projectId, userId, '新项目');
+            
+            console.log(`[Socket] Project created: ${projectId}`);
           }
+
+          // 添加用户消息到记忆
+          await this.memoryManager.addUserMessage(projectId, userId, content);
 
           // 意图分类
           const intentResult = await this.intentHandler.handle(content);
@@ -115,9 +127,7 @@ export class SocketHandler {
             if (intentResult.content) {
               socket.emit('chat:chunk', { content: intentResult.content });
               // 添加助手消息到记忆
-              if (projectId) {
-                await this.memoryManager.addAssistantMessage(projectId, intentResult.content);
-              }
+              await this.memoryManager.addAssistantMessage(projectId, intentResult.content);
             }
             socket.emit('chat:end', {});
           }
