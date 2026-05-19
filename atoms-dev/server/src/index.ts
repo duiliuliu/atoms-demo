@@ -56,21 +56,29 @@ app.get('/health', (req, res) => {
 
 const BASE_DIR = getSandboxBaseDir();
 
-app.get('/*', (req, res) => {
-  const filePath = req.path;
-  const segments = filePath.split('/').filter(s => s);
-  if (segments.length < 1) {
-    return res.status(404).send('Not Found');
-  }
-
-  const sandboxId = segments[0];
-  const relativePath = segments.slice(1).join('/') || 'index.html';
+// 预览路由 - 处理 /preview/:sandboxId/* 格式的请求
+app.get('/preview/:sandboxId/*', (req, res) => {
+  const { sandboxId } = req.params;
+  const wildcard = (req.params as Record<string, string>)[0];
+  const relativePath = wildcard || 'index.html';
   const fullPath = path.join(BASE_DIR, sandboxId, relativePath);
 
   if (fs.existsSync(fullPath)) {
     res.sendFile(fullPath);
   } else {
-    res.status(404).send(`File not found: ${filePath}`);
+    res.status(404).send(`File not found: ${sandboxId}/${relativePath}`);
+  }
+});
+
+// 预览路由 - 处理 /preview/:sandboxId 格式的请求（不带通配符）
+app.get('/preview/:sandboxId', (req, res) => {
+  const { sandboxId } = req.params;
+  const fullPath = path.join(BASE_DIR, sandboxId, 'index.html');
+
+  if (fs.existsSync(fullPath)) {
+    res.sendFile(fullPath);
+  } else {
+    res.status(404).send(`File not found: ${sandboxId}/index.html`);
   }
 });
 
