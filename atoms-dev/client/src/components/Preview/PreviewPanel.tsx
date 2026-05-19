@@ -39,6 +39,13 @@ export const PreviewPanel: React.FC = () => {
 
   const fullUrl = previewUrl ? `${getBackendUrl()}${previewUrl}` : null;
 
+  // 调试日志 - 帮助排查问题
+  console.log('[Preview] previewUrl:', previewUrl);
+  console.log('[Preview] getBackendUrl():', getBackendUrl());
+  console.log('[Preview] fullUrl:', fullUrl);
+  console.log('[Preview] VITE_BACKEND_URL:', import.meta.env.VITE_BACKEND_URL);
+  console.log('[Preview] DEV:', import.meta.env.DEV);
+
   return (
     <div className="relative w-full h-full bg-bg-primary flex flex-col">
       {/* Toolbar */}
