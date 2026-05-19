@@ -1,0 +1,72 @@
+# ===========================================
+# Atoms.dev 项目统一 .gitignore
+# ===========================================
+
+# 沙箱目录（用户生成的代码）
+atoms-sandbox/
+server/atoms-sandbox/
+
+# Node modules
+node_modules/
+*/node_modules/
+
+# Build outputs
+dist/
+*/dist/
+build/
+*/build/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*.sublime-workspace
+*.sublime-project
+
+# OS files
+.DS_Store
+Thumbs.db
+.DS_Store?
+._*
+
+# TypeScript
+*.tsbuildinfo
+
+# Temporary files
+*.tmp
+*.temp
+.cache/
+*.cache
+
+# Documentation (可选，根据需要调整)
+# docs/_site/
+# docs/.vitepress/cache/
+
+# Python (如果使用)
+__pycache__/
+*.py[cod]
+*$py.class
+.Python
+venv/
+ENV/
+env/
+.venv/
+
+# 保留 atoms-sandbox 目录但忽略其中的内容（如果需要）
+# atoms-sandbox/*
+# !atoms-sandbox/.gitkeep
