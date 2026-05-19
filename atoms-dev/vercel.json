@@ -1,0 +1,7 @@
+{
+  "build": {
+    "env": {
+      "VERCEL_PROJECT_ROOT": "client"
+    }
+  }
+}

@@ -1,15 +1,11 @@
 import { v4 as uuidv4 } from 'uuid';
 import * as fs from 'fs';
 import * as path from 'path';
-import { fileURLToPath } from 'url';
 import { exec } from 'child_process';
 import { promisify } from 'util';
+import { getSandboxBaseDir } from '../../config/env.js';
 
 const execAsync = promisify(exec);
-
-// 获取当前模块的目录（ES 模块兼容性）
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = path.dirname(__filename);
 
 interface Sandbox {
   id: string;
@@ -26,9 +22,8 @@ export class SandboxManager {
   private baseDir: string;
   
   constructor(baseDir?: string) {
-    // 使用服务根目录下的 atoms-sandbox 文件夹
-    const serverRoot = path.resolve(__dirname, '../../..');
-    this.baseDir = baseDir || path.join(serverRoot, 'atoms-sandbox');
+    // 使用环境判断使用环境变量或自定义目录
+    this.baseDir = baseDir || getSandboxBaseDir();
     
     if (!fs.existsSync(this.baseDir)) {
       fs.mkdirSync(this.baseDir, { recursive: true });
