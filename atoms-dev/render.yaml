@@ -8,6 +8,8 @@ services:
     buildCommand: npm install && npm run build
     startCommand: npm start
     envVars:
+      - key: MODE
+        value: production
       - key: NODE_ENV
         value: production
       - key: RENDER

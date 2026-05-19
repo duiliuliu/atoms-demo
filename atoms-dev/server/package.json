@@ -3,11 +3,13 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "tsx watch src/index.ts",
+    "dev": "MODE=development tsx watch src/index.ts",
     "build": "tsc",
-    "start": "node dist/index.js",
+    "start": "MODE=production node dist/index.js",
+    "start:dev": "MODE=development node dist/index.js",
+    "start:staging": "MODE=staging node dist/index.js",
     "render-build": "npm install && npm run build",
-    "render-start": "npm start"
+    "render-start": "MODE=production npm start"
   },
   "engines": {
     "node": ">=18.x"
