@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { io, Socket } from 'socket.io-client';
 import { Message, FileInfo, TerminalLine, AgentStatus, LLMProvider, TabType } from '@/types';
+import { getUserId, setLastProjectId } from '@/utils/userId';
 
 interface ChatStore {
   messages: Message[];
@@ -9,16 +10,74 @@ interface ChatStore {
   clearMessages: () => void;
 }
 
+interface Task {
+  id: string;
+  type: string;
+  description: string;
+  files: string[];
+  estimatedTokens: number;
+  dependencies: string[];
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+}
+
+interface UserIntent {
+  originalRequest: string;
+  understoodGoal: string;
+  scope: 'small' | 'medium' | 'large';
+  complexity: 'simple' | 'moderate' | 'complex';
+  techStack: string[];
+  keyFeatures: string[];
+  potentialIssues?: string[];
+}
+
+interface TaskBreakdown {
+  id: string;
+  userIntent: UserIntent;
+  tasks: Task[];
+  totalEstimatedTokens: number;
+  createdAt: number;
+  status: 'pending' | 'confirmed' | 'modified' | 'executing' | 'completed';
+}
+
+interface IntentClassification {
+  type: string;
+  confidence: number;
+  requiresTaskBreakdown: boolean;
+  requiresConfirmation: boolean;
+  summary: string;
+  keywords: string[];
+}
+
+interface ProjectListItem {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  lastVisitedAt: number;
+}
+
 interface ProjectStore {
   files: FileInfo[];
   activeFile: FileInfo | null;
   previewUrl: string;
   sandboxId: string | null;
+  projectId: string | null;
+  projects: ProjectListItem[];
   setFiles: (files: FileInfo[]) => void;
   setActiveFile: (path: string) => void;
   updateFile: (path: string, content: string) => void;
   setPreviewUrl: (url: string) => void;
   setSandboxId: (id: string) => void;
+  setProjectId: (id: string | null) => void;
+  setProjects: (projects: ProjectListItem[]) => void;
+}
+
+interface TaskStore {
+  currentBreakdown: TaskBreakdown | null;
+  showTaskPanel: boolean;
+  setTaskBreakdown: (breakdown: TaskBreakdown | null) => void;
+  setShowTaskPanel: (show: boolean) => void;
+  confirmTasks: () => void;
 }
 
 interface UIStore {
@@ -49,27 +108,47 @@ interface StatusStore {
 export const useChatStore = create<ChatStore>((set) => ({
   messages: [],
   isLoading: false,
-  
+
   sendMessage: (content: string) => {
     const socket = getSocket();
     if (!socket) return;
-    
+
+    const userId = getUserId();
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: 'user',
       content,
       timestamp: Date.now(),
     };
-    
+
     set((state) => ({
       messages: [...state.messages, userMessage],
       isLoading: true,
     }));
-    
-    socket.emit('chat:message', { content });
+
+    socket.emit('chat:message', { content, userId });
   },
-  
+
   clearMessages: () => set({ messages: [] }),
+}));
+
+// Task Store
+export const useTaskStore = create<TaskStore>((set) => ({
+  currentBreakdown: null,
+  showTaskPanel: false,
+
+  setTaskBreakdown: (breakdown) =>
+    set({ currentBreakdown: breakdown, showTaskPanel: !!breakdown }),
+
+  setShowTaskPanel: (show) => set({ showTaskPanel: show }),
+
+  confirmTasks: () => {
+    const socket = getSocket();
+    if (socket) {
+      socket.emit('task:confirm');
+      set({ showTaskPanel: false });
+    }
+  },
 }));
 
 // Project Store
@@ -78,14 +157,16 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   activeFile: null,
   previewUrl: '',
   sandboxId: null,
-  
+  projectId: null,
+  projects: [],
+
   setFiles: (files) => set({ files }),
-  
+
   setActiveFile: (path) => {
     const file = get().files.find((f) => f.path === path);
     set({ activeFile: file || null });
   },
-  
+
   updateFile: (path, content) => {
     set((state) => ({
       files: state.files.map((f) =>
@@ -97,10 +178,19 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           : state.activeFile,
     }));
   },
-  
+
   setPreviewUrl: (url) => set({ previewUrl: url }),
-  
+
   setSandboxId: (id) => set({ sandboxId: id }),
+
+  setProjectId: (id) => {
+    if (id) {
+      setLastProjectId(id);
+    }
+    set({ projectId: id });
+  },
+
+  setProjects: (projects) => set({ projects }),
 }));
 
 // UI Store
@@ -295,7 +385,35 @@ export function initSocket(): Socket {
   socket.on('llm:provider', (data: { provider: string }) => {
     useUIStore.getState().setCurrentProvider(data.provider as LLMProvider);
   });
-  
+
+  socket.on('task:breakdown', (data: { taskBreakdown: TaskBreakdown; classification: IntentClassification }) => {
+    useTaskStore.getState().setTaskBreakdown(data.taskBreakdown);
+  });
+
+  socket.on('project:list', (data: { projects: ProjectListItem[] }) => {
+    useProjectStore.getState().setProjects(data.projects);
+  });
+
+  socket.on('project:created', (data: { project: any }) => {
+    useProjectStore.getState().setProjectId(data.project.id);
+    useProjectStore.getState().setSandboxId(data.project.sandboxId);
+  });
+
+  socket.on('project:loaded', (data: { project: any }) => {
+    useProjectStore.getState().setProjectId(data.project.id);
+    useProjectStore.getState().setSandboxId(data.project.sandboxId);
+    useProjectStore.getState().setFiles(data.project.files || []);
+    useChatStore.getState().clearMessages();
+    useChatStore.setState({ messages: data.project.messages || [] });
+  });
+
+  socket.on('project:error', (data: { message: string }) => {
+    useStatusStore.getState().setStatus({
+      message: data.message,
+      type: 'error',
+    });
+  });
+
   return socket;
 }
 

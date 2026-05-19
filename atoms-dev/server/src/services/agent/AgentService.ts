@@ -190,7 +190,11 @@ export class AgentService extends EventEmitter {
   getSandboxManager(): SandboxManager {
     return this.sandbox;
   }
-  
+
+  getLLMService(): LLMService {
+    return this.llm;
+  }
+
   setLLMProvider(provider: 'deepseek' | 'zhipu'): void {
     this.llm.setProvider(provider);
   }
