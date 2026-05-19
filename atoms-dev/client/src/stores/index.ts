@@ -155,6 +155,20 @@ export const useStatusStore = create<StatusStore>((set) => ({
 // Socket instance
 let socket: Socket | null = null;
 
+// 获取后端 URL
+function getBackendUrl(): string {
+  // 优先使用环境变量
+  if (import.meta.env.VITE_BACKEND_URL) {
+    return import.meta.env.VITE_BACKEND_URL;
+  }
+  // 开发环境使用当前域名（配合代理）
+  if (import.meta.env.DEV) {
+    return window.location.origin;
+  }
+  // 生产环境也使用当前域名（如果通过代理）
+  return window.location.origin;
+}
+
 export function getSocket(): Socket | null {
   return socket;
 }
@@ -162,7 +176,10 @@ export function getSocket(): Socket | null {
 export function initSocket(): Socket {
   if (socket) return socket;
   
-  socket = io({
+  const backendUrl = getBackendUrl();
+  console.log('[Socket] Connecting to:', backendUrl);
+  
+  socket = io(backendUrl, {
     autoConnect: true,
     reconnection: true,
     reconnectionAttempts: 5,
