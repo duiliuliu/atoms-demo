@@ -22,6 +22,6 @@ export abstract class BaseLLMService {
     this.config = config;
   }
   
-  abstract stream(prompt: string): Promise<AsyncIterable<string>>;
+  abstract stream(prompt: string): AsyncIterable<string>;
   abstract complete(prompt: string): Promise<LLMResponse>;
 }
