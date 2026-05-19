@@ -1,0 +1,28 @@
+services:
+  - type: web
+    name: atoms-dev-server
+    env: node
+    plan: starter
+    region: singapore
+    rootDir: server
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: RENDER
+        value: "true"
+      - key: PORT
+        value: "10000"
+      - key: CORS_ORIGIN
+        sync: false
+      - key: DEEPSEEK_API_KEY
+        sync: false
+      - key: ZHIPU_API_KEY
+        sync: false
+      - key: DEEPSEEK_BASE_URL
+        sync: false
+      - key: ZHIPU_BASE_URL
+        sync: false
+    healthCheckPath: /health
+    autoDeploy: true
