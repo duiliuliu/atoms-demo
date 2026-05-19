@@ -5,6 +5,7 @@ import cors from 'cors';
 import dotenv from 'dotenv';
 import path from 'path';
 import fs from 'fs';
+import { fileURLToPath } from 'url';
 import { SocketHandler } from './websocket/SocketHandler.js';
 import { chatRouter } from './routes/chat.js';
 import { projectRouter } from './routes/project.js';
@@ -30,8 +31,12 @@ app.get('/health', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// 预览文件路由 - 关键修复
-const BASE_DIR = '/tmp/atoms-sandbox';
+// 预览文件路由 - 使用服务根目录下的 atoms-sandbox
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const serverRoot = path.resolve(__dirname, '..');
+const BASE_DIR = path.join(serverRoot, 'atoms-sandbox');
+
 app.get('/*', (req, res) => {
   const filePath = req.path;
   // 从路径中提取 sandboxId
