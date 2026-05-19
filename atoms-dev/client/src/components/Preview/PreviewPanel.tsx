@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useProjectStore } from '@/stores';
+import { getBackendUrl } from '@/stores';
 import { Tablet, Smartphone, RefreshCw, Monitor } from 'lucide-react';
 
 export const PreviewPanel: React.FC = () => {
@@ -36,7 +37,7 @@ export const PreviewPanel: React.FC = () => {
     }
   };
 
-  const fullUrl = previewUrl ? `${window.location.origin}${previewUrl}` : null;
+  const fullUrl = previewUrl ? `${getBackendUrl()}${previewUrl}` : null;
 
   return (
     <div className="relative w-full h-full bg-bg-primary flex flex-col">

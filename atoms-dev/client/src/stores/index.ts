@@ -156,7 +156,7 @@ export const useStatusStore = create<StatusStore>((set) => ({
 let socket: Socket | null = null;
 
 // 获取后端 URL
-function getBackendUrl(): string {
+export function getBackendUrl(): string {
   // 优先使用环境变量
   if (import.meta.env.VITE_BACKEND_URL) {
     return import.meta.env.VITE_BACKEND_URL;
