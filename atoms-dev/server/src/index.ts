@@ -76,7 +76,26 @@ app.get('/*', (req, res) => {
 
 const io = new Server(httpServer, {
   cors: {
-    origin: process.env.CORS_ORIGIN || 'http://localhost:5173',
+    origin: (origin: string | undefined, callback: (err: Error | null, allow?: boolean) => void) => {
+      const allowedOrigins: (string | RegExp)[] = [
+        getEnv('CORS_ORIGIN', 'http://localhost:5173'),
+      ];
+      if (isRender()) {
+        allowedOrigins.push(/.*\.onrender\.com/);
+        allowedOrigins.push(/https?:\/\/(.*\.vercel\.app)/);
+      }
+      if (!origin || allowedOrigins.some(pattern => {
+        if (typeof pattern === 'string') {
+          return origin === pattern;
+        } else {
+          return pattern.test(origin);
+        }
+      })) {
+        callback(null, true);
+      } else {
+        callback(new Error('Not allowed by CORS'));
+      }
+    },
     methods: ['GET', 'POST'],
   },
 });
