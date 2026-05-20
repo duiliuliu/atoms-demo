@@ -154,8 +154,15 @@ export class SocketHandler {
           });
 
           const compressedMemory = await this.memoryManager.getCompressedMemory(userId, projectId);
+          const projectList = await this.projectManager.listProjects(userId);
+          const projectsForContext = projectList.map(p => ({
+            id: p.id,
+            name: p.name,
+            createdAt: p.createdAt,
+            updatedAt: p.updatedAt
+          }));
 
-          const intentResult = await this.intentHandler.handle(content, compressedMemory);
+          const intentResult = await this.intentHandler.handle(content, compressedMemory, projectsForContext);
 
           if (intentResult.type === 'task_breakdown' && intentResult.taskBreakdown) {
             socket.data.taskBreakdown = intentResult.taskBreakdown;

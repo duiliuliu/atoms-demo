@@ -3,6 +3,13 @@ import { TaskAnalyzer } from './TaskAnalyzer.js';
 import type { LLMService } from './llm/LLMService.js';
 import type { IntentResponse } from '../types/intent.js';
 
+interface ProjectInfo {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
 export class IntentHandler {
   private classifier: IntentClassifier;
   private taskAnalyzer: TaskAnalyzer;
@@ -14,13 +21,13 @@ export class IntentHandler {
     this.llmService = llmService;
   }
 
-  async handle(input: string, memory?: string): Promise<IntentResponse> {
+  async handle(input: string, memory?: string, projects?: ProjectInfo[]): Promise<IntentResponse> {
     const classification = await this.classifier.classifyWithAI(input);
 
     switch (classification.type) {
       case 'question':
       case 'consultation':
-        return await this.handleQuestion(input, classification, memory);
+        return await this.handleQuestion(input, classification, memory, projects);
 
       case 'text_generation':
         return await this.handleTextGeneration(input, classification, memory);
@@ -32,7 +39,7 @@ export class IntentHandler {
       case 'refactor':
       case 'debug':
       case 'modify':
-        return await this.handleCodeProduction(input, classification, memory);
+        return await this.handleCodeProduction(input, classification, memory, projects);
 
       default:
         return await this.handleDefault(input, classification, memory);
@@ -44,13 +51,20 @@ export class IntentHandler {
     return `\n\n---\n记忆信息（最近对话）：\n${memory}`;
   }
 
+  private getProjectsContext(projects?: ProjectInfo[]): string {
+    if (!projects || projects.length === 0) return '';
+    const projectList = projects.map(p => `- "${p.name}" (ID: ${p.id})`).join('\n');
+    return `\n\n现有项目列表：\n${projectList}`;
+  }
+
   private async handleQuestion(
     input: string,
     classification: any,
-    memory?: string
+    memory?: string,
+    projects?: ProjectInfo[]
   ): Promise<IntentResponse> {
-    const context = this.getMemoryContext(memory);
-    const answer = await this.llmService.complete(`Please answer this question based on context: ${input}${context}`);
+    const context = this.getMemoryContext(memory) + this.getProjectsContext(projects);
+    const answer = await this.llmService.complete(`请根据上下文回答用户问题。用户说："${input}"${context}\n\n请直接回答用户问题。`);
 
     return {
       type: 'answer',
@@ -95,9 +109,10 @@ export class IntentHandler {
   private async handleCodeProduction(
     input: string,
     classification: any,
-    memory?: string
+    memory?: string,
+    projects?: ProjectInfo[]
   ): Promise<IntentResponse> {
-    const context = this.getMemoryContext(memory);
+    const context = this.getMemoryContext(memory) + this.getProjectsContext(projects);
     const taskBreakdown = await this.taskAnalyzer.analyzeRequest(input, context);
 
     return {
