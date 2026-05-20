@@ -1,6 +1,6 @@
 # Atoms.dev - AI 驱动的应用生成平台
 
-![Atoms.dev 截图](https://github.com/user-attachments/assets/placeholder)
+<img width="1400" height="1384" alt="image" src="https://github.com/user-attachments/assets/ea427700-52a0-4fe0-991d-9acc0060bcdb" />
 
 > 🚀 用自然语言描述你的想法，AI 为你生成可运行的完整应用
 
@@ -284,5 +284,5 @@ MIT License - 详见 [LICENSE](LICENSE)
 ---
 
 <p align="center">
-  Made with ❤️ by Atoms.dev Team
+  Made with ❤️ by duiliuliu
 </p>
