@@ -30,11 +30,11 @@ export class SocketHandler {
 
   private setupHandlers(): void {
     this.io.on('connection', (socket: Socket) => {
-      console.log(`[Socket] Client connected: ${socket.id}');
+      console.log(`[Socket] Client connected: ${socket.id}`);
 
       socket.on('llm:provider', (data: { provider: 'deepseek' | 'zhipu' }) => {
         this.agentService.setLLMProvider(data.provider);
-        console.log(`[Socket] LLM provider changed to: ${data.provider}');
+        console.log(`[Socket] LLM provider changed to: ${data.provider}`);
         socket.emit('llm:provider', { provider: data.provider });
       });
 
@@ -208,30 +208,30 @@ export class SocketHandler {
         }
       });
       
-      socket.on('files:list', () => {
-        const sandboxId = socket.data.sandboxId;
-        if (sandboxId) {
-          const sandbox = this.sandboxManager.getSandbox(sandboxId);
-          if (sandbox) {
-            const files = Array.from(sandbox.files.entries()).map(([path, content]) => ({
-              path,
-              name: path.split('/').pop() || path,
-              content,
-              language: this.getLanguage(path),
-              size: content.length,
-            }));
-            socket.emit('files:list', { files });
-            
-            if (socket.data.projectId && socket.data.userId) {
-              const filesToStore = Array.from(sandbox.files.entries()).map(([path, content]) => ({ path, content }));
-              await this.projectManager.saveProject(socket.data.projectId, socket.data.userId, {
-                files: filesToStore,
-                sandboxId
-              });
+      socket.on('files:list', async () => {
+          const sandboxId = socket.data.sandboxId;
+          if (sandboxId) {
+            const sandbox = this.sandboxManager.getSandbox(sandboxId);
+            if (sandbox) {
+              const files = Array.from(sandbox.files.entries()).map(([path, content]) => ({
+                path,
+                name: path.split('/').pop() || path,
+                content,
+                language: this.getLanguage(path),
+                size: content.length,
+              }));
+              socket.emit('files:list', { files });
+
+              if (socket.data.projectId && socket.data.userId) {
+                const filesToStore = Array.from(sandbox.files.entries()).map(([path, content]) => ({ path, content }));
+                await this.projectManager.saveProject(socket.data.projectId, socket.data.userId, {
+                  files: filesToStore,
+                  sandboxId
+                });
+              }
             }
           }
-        }
-      });
+        });
       
       socket.on('file:update', async (data: { path: string; content: string }) => {
         const sandboxId = socket.data.sandboxId;
@@ -269,7 +269,7 @@ export class SocketHandler {
       this.setupAgentEvents(socket);
       
       socket.on('disconnect', () => {
-        console.log(`[Socket] Client disconnected: ${socket.id}');
+        console.log(`[Socket] Client disconnected: ${socket.id}`);
       });
     });
   }
