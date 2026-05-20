@@ -63,6 +63,7 @@ interface ProjectStore {
   sandboxId: string | null;
   projectId: string | null;
   projects: ProjectListItem[];
+  previewEntryPath: string;
   setFiles: (files: FileInfo[]) => void;
   setActiveFile: (path: string) => void;
   updateFile: (path: string, content: string) => void;
@@ -70,6 +71,7 @@ interface ProjectStore {
   setSandboxId: (id: string) => void;
   setProjectId: (id: string | null) => void;
   setProjects: (projects: ProjectListItem[]) => void;
+  setPreviewEntryPath: (path: string) => void;
 }
 
 interface ExecutingTask {
@@ -218,8 +220,19 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   sandboxId: null,
   projectId: null,
   projects: [],
+  previewEntryPath: '',
 
-  setFiles: (files) => set({ files }),
+  setFiles: (files) => {
+    // 设置文件时，如果没有预览入口，自动选择第一个HTML文件
+    const htmlFiles = files.filter(f => 
+      f.name.toLowerCase().endsWith('.html') || f.name.toLowerCase().endsWith('.htm')
+    );
+    const currentPath = get().previewEntryPath;
+    const newPreviewPath = !currentPath && htmlFiles.length > 0 
+      ? htmlFiles[0].path 
+      : currentPath;
+    set({ files, previewEntryPath: newPreviewPath });
+  },
 
   setActiveFile: (path) => {
     const file = get().files.find((f) => f.path === path);
@@ -250,6 +263,8 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   },
 
   setProjects: (projects) => set({ projects }),
+
+  setPreviewEntryPath: (path) => set({ previewEntryPath: path }),
 }));
 
 // UI Store

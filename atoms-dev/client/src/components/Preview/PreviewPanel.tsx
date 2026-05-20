@@ -1,18 +1,52 @@
 import { useState } from 'react';
 import { useProjectStore } from '@/stores';
 import { getBackendUrl } from '@/stores';
-import { Tablet, Smartphone, RefreshCw, Monitor } from 'lucide-react';
+import { Tablet, Smartphone, RefreshCw, Monitor, FileText, ChevronDown } from 'lucide-react';
 
 export const PreviewPanel: React.FC = () => {
-  const { previewUrl } = useProjectStore();
+  const { 
+    previewUrl, 
+    sandboxId, 
+    files, 
+    previewEntryPath, 
+    setPreviewEntryPath 
+  } = useProjectStore();
   const [device, setDevice] = useState<'desktop' | 'tablet' | 'mobile'>('desktop');
   const [isLoading, setIsLoading] = useState(false);
   const [key, setKey] = useState(0);
+  const [showFileSelector, setShowFileSelector] = useState(false);
+
+  // 获取所有HTML文件用于预览选择
+  const htmlFiles = files.filter(f => 
+    f.name.toLowerCase().endsWith('.html') || f.name.toLowerCase().endsWith('.htm')
+  );
+
+  // 构造完整的预览URL
+  const getFullPreviewUrl = () => {
+    if (!previewUrl || !sandboxId) return null;
+    
+    // 如果用户选择了预览文件，直接使用该文件构造URL
+    if (previewEntryPath && sandboxId) {
+      return `${getBackendUrl()}/preview/${sandboxId}/${previewEntryPath}`;
+    }
+    
+    // 否则使用默认预览URL
+    return `${getBackendUrl()}${previewUrl}`;
+  };
+
+  const fullUrl = getFullPreviewUrl();
 
   const handleRefresh = () => {
     setIsLoading(true);
     setKey((k) => k + 1);
     setTimeout(() => setIsLoading(false), 500);
+  };
+
+  const handleFileSelect = (filePath: string) => {
+    setPreviewEntryPath(filePath);
+    setShowFileSelector(false);
+    // 切换文件时刷新预览
+    setKey(k => k + 1);
   };
 
   const getDeviceStyles = () => {
@@ -37,14 +71,12 @@ export const PreviewPanel: React.FC = () => {
     }
   };
 
-  const fullUrl = previewUrl ? `${getBackendUrl()}${previewUrl}` : null;
-
-  // 调试日志 - 帮助排查问题
-  console.log('[Preview] previewUrl:', previewUrl);
-  console.log('[Preview] getBackendUrl():', getBackendUrl());
-  console.log('[Preview] fullUrl:', fullUrl);
-  console.log('[Preview] VITE_BACKEND_URL:', import.meta.env.VITE_BACKEND_URL);
-  console.log('[Preview] DEV:', import.meta.env.DEV);
+  // 获取当前选择的文件名用于显示
+  const getCurrentFileName = () => {
+    if (!previewEntryPath) return '选择预览文件';
+    const file = files.find(f => f.path === previewEntryPath);
+    return file ? file.name : '选择预览文件';
+  };
 
   return (
     <div className="relative w-full h-full bg-bg-primary flex flex-col">
@@ -56,8 +88,46 @@ export const PreviewPanel: React.FC = () => {
             <div className="w-3 h-3 rounded-full bg-yellow-500" />
             <div className="w-3 h-3 rounded-full bg-green-500" />
           </div>
+          
+          {/* 文件选择器 */}
+          {htmlFiles.length > 0 && (
+            <div className="relative ml-3">
+              <button
+                onClick={() => setShowFileSelector(!showFileSelector)}
+                className="flex items-center gap-1 px-2 py-1 rounded bg-bg-tertiary hover:bg-bg-quaternary text-text-secondary text-xs transition"
+              >
+                <FileText className="w-3 h-3" />
+                <span className="truncate max-w-32">{getCurrentFileName()}</span>
+                <ChevronDown className="w-3 h-3" />
+              </button>
+              
+              {/* 文件选择下拉菜单 */}
+              {showFileSelector && (
+                <div className="absolute top-full left-0 mt-1 bg-bg-tertiary border border-border rounded-lg shadow-xl z-50 min-w-40">
+                  {htmlFiles.map((file) => (
+                    <button
+                      key={file.path}
+                      onClick={() => handleFileSelect(file.path)}
+                      className={`
+                        w-full px-3 py-2 text-left text-xs flex items-center gap-2
+                        ${previewEntryPath === file.path 
+                          ? 'bg-primary text-white' 
+                          : 'text-text-secondary hover:bg-bg-quaternary hover:text-white'
+                        }
+                        transition
+                      `}
+                    >
+                      <FileText className="w-3 h-3" />
+                      <span className="truncate">{file.name}</span>
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
+          )}
+          
           <span className="text-xs text-text-secondary ml-2">
-            {previewUrl ? '预览' : '等待生成...'}
+            {fullUrl ? '预览' : '等待生成...'}
           </span>
         </div>
 
