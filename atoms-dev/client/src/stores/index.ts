@@ -72,13 +72,25 @@ interface ProjectStore {
   setProjects: (projects: ProjectListItem[]) => void;
 }
 
+interface ExecutingTask {
+  id: string;
+  description: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  output?: string;
+  createdAt: number;
+}
+
 interface TaskStore {
   currentBreakdown: TaskBreakdown | null;
   showTaskPanel: boolean;
+  executingTasks: ExecutingTask[];
   setTaskBreakdown: (breakdown: TaskBreakdown | null) => void;
   setShowTaskPanel: (show: boolean) => void;
   confirmTasks: () => void;
   cancelTasks: () => void;
+  startTaskExecution: (tasks: Task[]) => void;
+  updateTaskStatus: (taskId: string, status: ExecutingTask['status'], output?: string) => void;
+  clearExecutingTasks: () => void;
 }
 
 interface UIStore {
@@ -134,9 +146,10 @@ export const useChatStore = create<ChatStore>((set) => ({
 }));
 
 // Task Store
-export const useTaskStore = create<TaskStore>((set) => ({
+export const useTaskStore = create<TaskStore>((set, get) => ({
   currentBreakdown: null,
   showTaskPanel: false,
+  executingTasks: [],
 
   setTaskBreakdown: (breakdown) =>
     set({ currentBreakdown: breakdown, showTaskPanel: !!breakdown }),
@@ -145,10 +158,26 @@ export const useTaskStore = create<TaskStore>((set) => ({
 
   confirmTasks: () => {
     const socket = getSocket();
+    const current = get().currentBreakdown;
     if (socket) {
       socket.emit('task:confirm');
       useChatStore.setState({ isLoading: true });
-      set({ currentBreakdown: null, showTaskPanel: false });
+      
+      if (current) {
+        const tasks = current.tasks.map(task => ({
+          id: task.id,
+          description: task.description,
+          status: 'pending' as const,
+          createdAt: Date.now(),
+        }));
+        set({ 
+          currentBreakdown: null, 
+          showTaskPanel: false,
+          executingTasks: tasks 
+        });
+      } else {
+        set({ currentBreakdown: null, showTaskPanel: false });
+      }
     }
   },
 
@@ -157,8 +186,28 @@ export const useTaskStore = create<TaskStore>((set) => ({
     if (socket) {
       socket.emit('task:cancel');
     }
-    set({ currentBreakdown: null, showTaskPanel: false });
+    set({ currentBreakdown: null, showTaskPanel: false, executingTasks: [] });
   },
+
+  startTaskExecution: (tasks) => {
+    const executingTasks = tasks.map(task => ({
+      id: task.id,
+      description: task.description,
+      status: 'pending' as const,
+      createdAt: Date.now(),
+    }));
+    set({ executingTasks });
+  },
+
+  updateTaskStatus: (taskId, status, output) => {
+    set(state => ({
+      executingTasks: state.executingTasks.map(task =>
+        task.id === taskId ? { ...task, status, output: output || task.output } : task
+      )
+    }));
+  },
+
+  clearExecutingTasks: () => set({ executingTasks: [] }),
 }));
 
 // Project Store
@@ -343,6 +392,31 @@ export function initSocket(): Socket {
       message: data.message,
       type: data.type as AgentStatus['type'],
     });
+    
+    // 模拟任务状态更新
+    const taskStore = useTaskStore.getState();
+    const tasks = taskStore.executingTasks;
+    
+    if (tasks.length > 0) {
+      // 找到第一个 pending 或 in_progress 的任务
+      let taskUpdated = false;
+      for (let i = 0; i < tasks.length && !taskUpdated; i++) {
+        const task = tasks[i];
+        
+        if (task.status === 'pending') {
+          // 将第一个 pending 任务标记为 in_progress
+          taskStore.updateTaskStatus(task.id, 'in_progress', '开始执行...');
+          taskUpdated = true;
+        } else if (task.status === 'in_progress') {
+          // 根据状态消息判断是否完成
+          if (data.message.includes('创建') || data.message.includes('完成')) {
+            taskStore.updateTaskStatus(task.id, 'completed', 
+              `${task.description}\n执行结果：\n${data.message}`);
+            taskUpdated = true;
+          }
+        }
+      }
+    }
   });
   
   socket.on('sandbox:created', (data: { sandboxId: string; previewUrl: string }) => {
@@ -404,6 +478,25 @@ export function initSocket(): Socket {
   socket.on('task:breakdown', (data: { taskBreakdown: TaskBreakdown; classification: IntentClassification }) => {
     useChatStore.setState({ isLoading: false });
     useTaskStore.getState().setTaskBreakdown(data.taskBreakdown);
+  });
+
+  // 当聊天结束时，将所有任务标记为完成
+  socket.on('chat:end', () => {
+    useChatStore.setState({ isLoading: false });
+    
+    const taskStore = useTaskStore.getState();
+    const tasks = taskStore.executingTasks;
+    tasks.forEach(task => {
+      if (task.status !== 'completed') {
+        taskStore.updateTaskStatus(task.id, 'completed', task.output || '任务执行完成');
+      }
+    });
+    
+    const projectStore = useProjectStore.getState();
+    if (projectStore.sandboxId) {
+      socket?.emit('files:list');
+      socket?.emit('preview:get_url');
+    }
   });
 
   socket.on('project:list', (data: { projects: ProjectListItem[] }) => {

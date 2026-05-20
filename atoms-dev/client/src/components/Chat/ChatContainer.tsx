@@ -3,18 +3,19 @@ import { useChatStore, useTaskStore } from '@/stores';
 import { MessageBubble } from './MessageBubble';
 import { InputBox } from './InputBox';
 import { TaskConfirmation } from './TaskConfirmation';
+import { TaskExecutionList } from './TaskExecutionList';
 import { Bot } from 'lucide-react';
 
 export const ChatContainer: React.FC = () => {
   const { messages, isLoading } = useChatStore();
-  const { currentBreakdown } = useTaskStore();
+  const { currentBreakdown, executingTasks } = useTaskStore();
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (containerRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
-  }, [messages]);
+  }, [messages, executingTasks]);
 
   return (
     <div className="flex flex-col h-full bg-bg-primary">
@@ -23,7 +24,7 @@ export const ChatContainer: React.FC = () => {
         ref={containerRef}
         className="flex-1 overflow-y-auto p-4 space-y-4"
       >
-        {messages.length === 0 && !currentBreakdown && (
+        {messages.length === 0 && !currentBreakdown && executingTasks.length === 0 && (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <div className="w-20 h-20 rounded-full bg-bg-secondary flex items-center justify-center mb-4">
               <Bot className="w-10 h-10 text-primary" />
@@ -46,6 +47,10 @@ export const ChatContainer: React.FC = () => {
         )}
 
         {currentBreakdown && <TaskConfirmation />}
+
+        {executingTasks.length > 0 && (
+          <TaskExecutionList tasks={executingTasks} />
+        )}
 
         {messages.map((msg) => (
           <MessageBubble key={msg.id} message={msg} />

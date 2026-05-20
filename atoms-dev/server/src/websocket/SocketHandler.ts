@@ -5,6 +5,7 @@ import { ProjectManager } from '../services/ProjectManager.js';
 import { IntentHandler } from '../services/IntentHandler.js';
 import { MemoryManager } from '../services/MemoryManager.js';
 import { LLMService } from '../services/llm/LLMService.js';
+import type { StoredProject } from '../types/project.js';
 
 export class SocketHandler {
   private io: Server;
@@ -29,22 +30,19 @@ export class SocketHandler {
 
   private setupHandlers(): void {
     this.io.on('connection', (socket: Socket) => {
-      console.log(`[Socket] Client connected: ${socket.id}`);
+      console.log(`[Socket] Client connected: ${socket.id}');
 
-      // 切换 AI 模型
       socket.on('llm:provider', (data: { provider: 'deepseek' | 'zhipu' }) => {
         this.agentService.setLLMProvider(data.provider);
-        console.log(`[Socket] LLM provider changed to: ${data.provider}`);
+        console.log(`[Socket] LLM provider changed to: ${data.provider}');
         socket.emit('llm:provider', { provider: data.provider });
       });
 
-      // 项目列表
       socket.on('project:list', async ({ userId }: { userId: string }) => {
         const projects = await this.projectManager.listProjects(userId);
         socket.emit('project:list', { projects });
       });
 
-      // 创建项目
       socket.on('project:create', async ({ userId, name }: { userId: string; name: string }) => {
         try {
           const project = await this.projectManager.createProject(userId, name);
@@ -57,32 +55,54 @@ export class SocketHandler {
         }
       });
 
-      // 获取项目
       socket.on('project:get', async ({ projectId, userId }: { projectId: string; userId: string }) => {
         const project = await this.projectManager.getProject(projectId, userId);
         if (project) {
           socket.data.projectId = project.id;
           socket.data.userId = userId;
           await this.projectManager.touchProject(projectId, userId);
+          
+          if ((project as StoredProject).sandboxId) {
+            const sandboxId = (project as StoredProject).sandboxId;
+            const existingSandbox = this.sandboxManager.getSandbox(sandboxId);
+            if (existingSandbox) {
+              socket.data.sandboxId = sandboxId;
+              console.log(`[Socket] Restored sandbox for project: ${projectId}`);
+            }
+          }
+          
           socket.emit('project:loaded', { project });
+          
+          if ((project as StoredProject).files) {
+            const files = (project as StoredProject).files?.map(f => ({
+              path: f.path,
+              name: f.path.split('/').pop() || f.path,
+              content: f.content,
+              language: this.getLanguage(f.path),
+              size: f.content.length,
+            }));
+            socket.emit('files:list', { files });
+          }
+          
+          if ((project as StoredProject).sandboxId) {
+            const previewUrl = this.sandboxManager.getPreviewUrl((project as StoredProject).sandboxId);
+            socket.emit('preview:url', { url: previewUrl, sandboxId: (project as StoredProject).sandboxId });
+          }
         } else {
           socket.emit('project:error', { message: '项目不存在' });
         }
       });
 
-      // 重命名项目
       socket.on('project:rename', async ({ projectId, userId, name }: { projectId: string; userId: string; name: string }) => {
         await this.projectManager.saveProject(projectId, userId, { name });
         socket.emit('project:renamed', { projectId, name });
       });
 
-      // 删除项目
       socket.on('project:delete', async ({ projectId, userId }: { projectId: string; userId: string }) => {
         await this.projectManager.deleteProject(projectId, userId);
         socket.emit('project:deleted', { projectId });
       });
 
-      // 发送聊天消息
       socket.on('chat:message', async (data: { content: string; userId: string }) => {
         console.log(`[Socket] Chat message received: ${data.content.substring(0, 50)}...`);
 
@@ -91,39 +111,28 @@ export class SocketHandler {
           let sandboxId = socket.data.sandboxId;
           let projectId = socket.data.projectId;
 
-          // 自动创建项目（如果没有项目）
           if (!projectId) {
             console.log(`[Socket] Auto-creating project for user: ${userId}`);
             const project = await this.projectManager.createProject(userId, '新项目');
             projectId = project.id;
             socket.data.projectId = projectId;
             socket.data.userId = userId;
-            
-            // 同时创建记忆
             await this.memoryManager.createProjectMemory(projectId, userId, '新项目');
-            
             console.log(`[Socket] Project created: ${projectId}`);
           }
 
-          // 添加用户消息到记忆
           await this.memoryManager.addUserMessage(projectId, userId, content);
-
-          // 意图分类
           const intentResult = await this.intentHandler.handle(content);
 
           if (intentResult.type === 'task_breakdown' && intentResult.taskBreakdown) {
-            // 需要任务拆分和确认
             socket.data.taskBreakdown = intentResult.taskBreakdown;
             socket.emit('task:breakdown', {
               taskBreakdown: intentResult.taskBreakdown,
               classification: intentResult.classification,
             });
-            // 不发送 chat:chunk，因为 TaskConfirmation UI 会显示
           } else {
-            // 直接回答
             if (intentResult.content) {
               socket.emit('chat:chunk', { content: intentResult.content });
-              // 添加助手消息到记忆
               await this.memoryManager.addAssistantMessage(projectId, intentResult.content);
             }
             socket.emit('chat:end', {});
@@ -134,7 +143,6 @@ export class SocketHandler {
         }
       });
 
-      // 确认任务
       socket.on('task:confirm', async () => {
         const taskBreakdown = socket.data.taskBreakdown;
         if (!taskBreakdown) {
@@ -147,7 +155,6 @@ export class SocketHandler {
           const userId = socket.data.userId;
           const projectId = socket.data.projectId;
 
-          // 获取当前文件
           let files: Map<string, string> | undefined;
           if (sandboxId) {
             const sandbox = this.sandboxManager.getSandbox(sandboxId);
@@ -156,7 +163,6 @@ export class SocketHandler {
             }
           }
 
-          // 执行请求
           const stream = await this.agentService.processRequest(
             taskBreakdown.userIntent.originalRequest,
             { 
@@ -173,7 +179,6 @@ export class SocketHandler {
 
           socket.emit('chat:end', {});
 
-          // 更新记忆
           if (projectId) {
             await this.memoryManager.addConversation(projectId, {
               userRequest: taskBreakdown.userIntent.originalRequest,
@@ -183,7 +188,6 @@ export class SocketHandler {
             });
           }
           
-          // 清除任务分解数据
           socket.data.taskBreakdown = null;
         } catch (error: any) {
           console.error('[Socket] Task execution error:', error);
@@ -191,13 +195,11 @@ export class SocketHandler {
         }
       });
 
-      // 取消任务
       socket.on('task:cancel', () => {
         socket.data.taskBreakdown = null;
         console.log('[Socket] Task cancelled');
       });
       
-      // 获取预览 URL
       socket.on('preview:get_url', () => {
         const sandboxId = socket.data.sandboxId;
         if (sandboxId) {
@@ -206,7 +208,6 @@ export class SocketHandler {
         }
       });
       
-      // 获取文件列表
       socket.on('files:list', () => {
         const sandboxId = socket.data.sandboxId;
         if (sandboxId) {
@@ -220,11 +221,18 @@ export class SocketHandler {
               size: content.length,
             }));
             socket.emit('files:list', { files });
+            
+            if (socket.data.projectId && socket.data.userId) {
+              const filesToStore = Array.from(sandbox.files.entries()).map(([path, content]) => ({ path, content }));
+              await this.projectManager.saveProject(socket.data.projectId, socket.data.userId, {
+                files: filesToStore,
+                sandboxId
+              });
+            }
           }
         }
       });
       
-      // 更新文件
       socket.on('file:update', async (data: { path: string; content: string }) => {
         const sandboxId = socket.data.sandboxId;
         if (sandboxId) {
@@ -233,7 +241,6 @@ export class SocketHandler {
         }
       });
       
-      // 执行命令
       socket.on('terminal:execute', async (data: { command: string }) => {
         const sandboxId = socket.data.sandboxId;
         if (sandboxId) {
@@ -259,12 +266,10 @@ export class SocketHandler {
         }
       });
       
-      // Agent 事件
       this.setupAgentEvents(socket);
       
-      // 断开连接
       socket.on('disconnect', () => {
-        console.log(`[Socket] Client disconnected: ${socket.id}`);
+        console.log(`[Socket] Client disconnected: ${socket.id}');
       });
     });
   }
@@ -277,6 +282,12 @@ export class SocketHandler {
     this.agentService.on('sandbox_created', (data: { sandboxId: string; previewUrl: string }) => {
       socket.data.sandboxId = data.sandboxId;
       socket.emit('sandbox:created', data);
+      
+      if (socket.data.projectId && socket.data.userId) {
+        this.projectManager.saveProject(socket.data.projectId, socket.data.userId, {
+          sandboxId: data.sandboxId
+        });
+      }
     });
     
     this.agentService.on('file_created', (data: { path: string; sandboxId: string }) => {
