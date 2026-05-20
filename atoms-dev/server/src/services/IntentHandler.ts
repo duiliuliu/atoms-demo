@@ -14,35 +14,42 @@ export class IntentHandler {
     this.llmService = llmService;
   }
 
-  async handle(input: string): Promise<IntentResponse> {
+  async handle(input: string, memory?: string): Promise<IntentResponse> {
     const classification = await this.classifier.classifyWithAI(input);
 
     switch (classification.type) {
       case 'question':
       case 'consultation':
-        return await this.handleQuestion(input, classification);
+        return await this.handleQuestion(input, classification, memory);
 
       case 'text_generation':
-        return await this.handleTextGeneration(input, classification);
+        return await this.handleTextGeneration(input, classification, memory);
 
       case 'document_generation':
-        return await this.handleDocumentGeneration(input, classification);
+        return await this.handleDocumentGeneration(input, classification, memory);
 
       case 'code_production':
       case 'refactor':
       case 'debug':
-        return await this.handleCodeProduction(input, classification);
+        return await this.handleCodeProduction(input, classification, memory);
 
       default:
-        return await this.handleDefault(input, classification);
+        return await this.handleDefault(input, classification, memory);
     }
+  }
+
+  private getMemoryContext(memory?: string): string {
+    if (!memory) return '';
+    return `\n\n---\n记忆信息（最近对话）：\n${memory}`;
   }
 
   private async handleQuestion(
     input: string,
-    classification: any
+    classification: any,
+    memory?: string
   ): Promise<IntentResponse> {
-    const answer = await this.llmService.complete(`Please answer this question: ${input}`);
+    const context = this.getMemoryContext(memory);
+    const answer = await this.llmService.complete(`Please answer this question based on context: ${input}${context}`);
 
     return {
       type: 'answer',
@@ -54,9 +61,11 @@ export class IntentHandler {
 
   private async handleTextGeneration(
     input: string,
-    classification: any
+    classification: any,
+    memory?: string
   ): Promise<IntentResponse> {
-    const text = await this.llmService.complete(`Please generate text based on this request: ${input}`);
+    const context = this.getMemoryContext(memory);
+    const text = await this.llmService.complete(`Please generate text based on this request and context: ${input}${context}`);
 
     return {
       type: 'text',
@@ -68,9 +77,11 @@ export class IntentHandler {
 
   private async handleDocumentGeneration(
     input: string,
-    classification: any
+    classification: any,
+    memory?: string
   ): Promise<IntentResponse> {
-    const document = await this.llmService.complete(`Please generate documentation based on this request: ${input}`);
+    const context = this.getMemoryContext(memory);
+    const document = await this.llmService.complete(`Please generate documentation based on this request and context: ${input}${context}`);
 
     return {
       type: 'document',
@@ -82,9 +93,11 @@ export class IntentHandler {
 
   private async handleCodeProduction(
     input: string,
-    classification: any
+    classification: any,
+    memory?: string
   ): Promise<IntentResponse> {
-    const taskBreakdown = await this.taskAnalyzer.analyzeRequest(input);
+    const context = this.getMemoryContext(memory);
+    const taskBreakdown = await this.taskAnalyzer.analyzeRequest(input, context);
 
     return {
       type: 'task_breakdown',
@@ -96,7 +109,8 @@ export class IntentHandler {
 
   private async handleDefault(
     input: string,
-    classification: any
+    classification: any,
+    memory?: string
   ): Promise<IntentResponse> {
     return {
       type: 'clarification',

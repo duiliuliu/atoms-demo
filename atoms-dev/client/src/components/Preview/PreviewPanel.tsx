@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useProjectStore } from '@/stores';
 import { getBackendUrl } from '@/stores';
 import { Tablet, Smartphone, RefreshCw, Monitor, FileText, ChevronDown } from 'lucide-react';
@@ -15,6 +15,11 @@ export const PreviewPanel: React.FC = () => {
   const [isLoading, setIsLoading] = useState(false);
   const [key, setKey] = useState(0);
   const [showFileSelector, setShowFileSelector] = useState(false);
+  
+  // 当 sandboxId 变化时刷新预览
+  useEffect(() => {
+    setKey(k => k + 1);
+  }, [sandboxId]);
 
   // 获取所有HTML文件用于预览选择
   const htmlFiles = files.filter(f => 

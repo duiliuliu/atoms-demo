@@ -129,6 +129,7 @@ export const useChatStore = create<ChatStore>((set) => ({
     if (!socket) return;
 
     const userId = getUserId();
+    const projectId = useProjectStore.getState().projectId;
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: 'user',
@@ -141,7 +142,17 @@ export const useChatStore = create<ChatStore>((set) => ({
       isLoading: true,
     }));
 
-    socket.emit('chat:message', { content, userId });
+    const recentMessages = useChatStore.getState().messages.slice(-5);
+    const memoryContext = recentMessages.map(m => 
+      `${m.role === 'user' ? '用户' : 'AI'}: ${m.content.substring(0, 100)}${m.content.length > 100 ? '...' : ''}`
+    ).join('\n');
+
+    socket.emit('chat:message', { 
+      content, 
+      userId,
+      projectId,
+      memory: memoryContext
+    });
   },
 
   clearMessages: () => set({ messages: [] }),
@@ -548,15 +559,25 @@ export function initSocket(): Socket {
     useProjectStore.getState().setProjectId(data.project.id);
     useProjectStore.getState().setSandboxId(data.project.sandboxId);
     
+    // 重置预览入口路径
+    useProjectStore.getState().setPreviewEntryPath('');
+    
     // 设置文件列表
     if (data.project.files && data.project.files.length > 0) {
       useProjectStore.getState().setFiles(data.project.files);
+    } else {
+      useProjectStore.getState().setFiles([]);
     }
     
     // 清除并重置聊天记录
     useChatStore.getState().clearMessages();
     if (data.project.messages && data.project.messages.length > 0) {
-      useChatStore.setState({ messages: data.project.messages });
+      useChatStore.setState({ messages: data.project.messages.map(m => ({
+        id: m.id,
+        role: m.role === 'user' ? 'user' : 'ai',
+        content: m.content,
+        timestamp: m.timestamp
+      })) });
     }
     
     // 如果有沙箱 ID，请求文件列表和预览 URL

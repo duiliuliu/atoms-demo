@@ -8,13 +8,13 @@ export class TaskAnalyzer {
     this.llmService = llmService;
   }
 
-  async analyzeRequest(userInput: string): Promise<TaskBreakdown> {
+  async analyzeRequest(userInput: string, context?: string): Promise<TaskBreakdown> {
     try {
-      const taskBreakdown = await this.createDefaultBreakdown(userInput);
+      const taskBreakdown = await this.createDefaultBreakdown(userInput, context);
       return taskBreakdown;
     } catch (error) {
       console.error('TaskAnalyzer error:', error);
-      return this.createDefaultBreakdown(userInput);
+      return this.createDefaultBreakdown(userInput, context);
     }
   }
 
@@ -46,7 +46,7 @@ ${tasksList}
 Please reply "confirm" to proceed, or let me know if you need to make any changes.`;
   }
 
-  private createDefaultBreakdown(userInput: string): TaskBreakdown {
+  private createDefaultBreakdown(userInput: string, context?: string): TaskBreakdown {
     return {
       id: crypto.randomUUID(),
       userIntent: {

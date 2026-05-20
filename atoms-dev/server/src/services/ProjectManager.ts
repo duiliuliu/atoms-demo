@@ -27,7 +27,7 @@ export class ProjectManager {
     return userMetaDir;
   }
 
-  async listProjects(userId: string): Promise<ProjectListItem[]> {
+  async listProjects(userId: string): Promise<Array<ProjectListItem & { messages?: StoredProject['messages'] }>> {
     const userMetaDir = this.getUserMetaDir(userId);
 
     if (!fs.existsSync(userMetaDir)) {
@@ -47,7 +47,8 @@ export class ProjectManager {
       id: p.id,
       name: p.name,
       createdAt: p.createdAt,
-      updatedAt: p.updatedAt
+      updatedAt: p.updatedAt,
+      messages: p.messages
     }));
   }
 

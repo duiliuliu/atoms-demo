@@ -122,13 +122,13 @@ export class SocketHandler {
         socket.emit('project:deleted', { projectId });
       });
 
-      socket.on('chat:message', async (data: { content: string; userId: string }) => {
+      socket.on('chat:message', async (data: { content: string; userId: string; projectId?: string; memory?: string }) => {
         console.log(`[Socket] Chat message received: ${data.content.substring(0, 50)}...`);
 
         try {
-          const { content, userId } = data;
+          const { content, userId, memory } = data;
           let sandboxId = socket.data.sandboxId;
-          let projectId = socket.data.projectId;
+          let projectId = data.projectId || socket.data.projectId;
 
           if (!projectId) {
             console.log(`[Socket] Auto-creating project for user: ${userId}`);
@@ -153,7 +153,7 @@ export class SocketHandler {
             messages: [userMessage]
           });
 
-          const intentResult = await this.intentHandler.handle(content);
+          const intentResult = await this.intentHandler.handle(content, memory);
 
           if (intentResult.type === 'task_breakdown' && intentResult.taskBreakdown) {
             socket.data.taskBreakdown = intentResult.taskBreakdown;
