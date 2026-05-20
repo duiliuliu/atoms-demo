@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useProjectStore } from '@/stores';
 import { getUserId } from '@/utils/userId';
 import { getSocket } from '@/stores';
-import { FolderOpen, Folder, Plus, Trash2, FileText, Clock, ChevronRight, ChevronDown, Edit3, Check, X, MessageSquare, File, Folder as FolderIcon } from 'lucide-react';
+import { FolderOpen, Folder, Plus, Trash2, FileText, Clock, ChevronRight, ChevronDown, Edit3, Check, X, MessageSquare, File, Folder as FolderIcon, ChevronLeft, ChevronRight as ChevronRightIcon } from 'lucide-react';
 
 interface ProjectItem {
   id: string;
@@ -19,7 +19,12 @@ interface TreeNode {
   children: TreeNode[];
 }
 
-export const Sidebar: React.FC = () => {
+interface SidebarProps {
+  isCollapsed: boolean;
+  onToggle: () => void;
+}
+
+export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
   const { projects, files, setProjectId, setFiles, setSandboxId, setPreviewUrl, projectId: activeProjectId, setPreviewEntryPath } = useProjectStore();
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
@@ -203,23 +208,45 @@ export const Sidebar: React.FC = () => {
   };
 
   return (
-    <div className="w-full bg-bg-secondary border-r border-border flex flex-col h-full">
+    <div className={`bg-bg-secondary border-r border-border flex flex-col h-full transition-all duration-200 ${isCollapsed ? 'w-12' : 'w-full'}`}>
       {/* Header */}
-      <div className="p-4 border-b border-border">
-        <div className="flex items-center justify-between">
+      <div className={`p-2 border-b border-border flex items-center justify-between ${isCollapsed ? 'py-4' : 'p-4'}`}>
+        {!isCollapsed && (
           <div className="flex items-center gap-2">
             <FolderOpen className="w-4 h-4 text-primary" />
             <span className="text-sm font-semibold">项目列表</span>
           </div>
+        )}
+        <div className="flex items-center gap-1">
           <button
             onClick={handleCreateProject}
-            className="p-1.5 hover:bg-bg-tertiary rounded-md transition flex items-center gap-1 text-xs text-text-secondary hover:text-white"
+            className={`p-1.5 hover:bg-bg-tertiary rounded-md transition flex items-center gap-1 text-xs text-text-secondary hover:text-white ${isCollapsed ? 'mx-auto' : ''}`}
             title="创建新项目"
           >
             <Plus className="w-3.5 h-3.5" />
           </button>
+          {!isCollapsed && (
+            <button
+              onClick={onToggle}
+              className="p-1.5 hover:bg-bg-tertiary rounded-md transition flex items-center gap-1 text-xs text-text-secondary hover:text-white"
+              title="折叠侧边栏"
+            >
+              <ChevronLeft className="w-3.5 h-3.5" />
+            </button>
+          )}
         </div>
       </div>
+      
+      {/* Collapsed Toggle Button */}
+      {isCollapsed && (
+        <button
+          onClick={onToggle}
+          className="absolute left-12 top-4 p-1 bg-bg-tertiary hover:bg-bg-quaternary rounded-r-md transition flex items-center"
+          title="展开侧边栏"
+        >
+          <ChevronRightIcon className="w-4 h-4 text-text-secondary" />
+        </button>
+      )}
 
       {/* Projects List */}
       <div className="flex-1 overflow-y-auto p-2 space-y-1">

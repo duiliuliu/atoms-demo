@@ -7,12 +7,22 @@ import { CodeEditor } from './components/Editor/CodeEditor';
 import { TerminalPanel } from './components/Terminal/TerminalPanel';
 import { StatusBar } from './components/Layout/StatusBar';
 import { Sidebar } from './components/Layout/Sidebar';
+import { PreviewCodeTabBar } from './components/Layout/TabBar';
 import { initSocket } from './stores';
 
 function App() {
   useEffect(() => {
     initSocket();
   }, []);
+
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  const [activeTab, setActiveTab] = useState<'preview' | 'code'>('preview');
+  const [terminalExpanded, setTerminalExpanded] = useState(false);
+  const [terminalHeight, setTerminalHeight] = useState(150);
+
+  const handleTerminalResize = (height: number) => {
+    setTerminalHeight(height);
+  };
 
   return (
     <div className="flex flex-col h-screen bg-bg-primary">
@@ -22,12 +32,15 @@ function App() {
         <PanelGroup direction="horizontal" className="h-full">
           {/* 左侧：项目列表 */}
           <Panel
-            defaultSize={20}
-            minSize={15}
+            defaultSize={sidebarCollapsed ? 5 : 20}
+            minSize={5}
             maxSize={30}
-            className="flex flex-col"
+            className="flex flex-col relative"
           >
-            <Sidebar />
+            <Sidebar 
+              isCollapsed={sidebarCollapsed} 
+              onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} 
+            />
           </Panel>
           
           <PanelResizeHandle className="w-1 bg-border hover:bg-primary transition-colors cursor-col-resize" />
@@ -50,47 +63,22 @@ function App() {
             minSize={30}
             className="flex flex-col"
           >
-            <PanelGroup direction="horizontal" className="h-full">
-              {/* 预览 */}
-              <Panel
-                defaultSize={50}
-                minSize={30}
-                className="flex flex-col"
-              >
-                <div className="h-8 bg-bg-tertiary border-b border-border flex items-center px-3 text-xs text-text-secondary">
-                  预览
-                </div>
-                <div className="flex-1 overflow-hidden">
-                  <PreviewPanel />
-                </div>
-              </Panel>
-              
-              <PanelResizeHandle className="w-1 bg-border hover:bg-primary transition-colors cursor-col-resize" />
-              
-              {/* 代码编辑器 */}
-              <Panel
-                defaultSize={50}
-                minSize={30}
-                className="flex flex-col"
-              >
-                <div className="h-8 bg-bg-tertiary border-b border-border flex items-center px-3 text-xs text-text-secondary">
-                  代码
-                </div>
-                <div className="flex-1 overflow-hidden">
-                  <CodeEditor />
-                </div>
-              </Panel>
-            </PanelGroup>
+            {/* Tab Bar */}
+            <PreviewCodeTabBar activeTab={activeTab} onTabChange={(tab) => setActiveTab(tab as 'preview' | 'code')} />
             
-            {/* 终端 */}
-            <div className="h-32 border-t border-border flex flex-col">
-              <div className="h-6 bg-bg-tertiary flex items-center px-3 text-xs text-text-secondary">
-                终端
-              </div>
-              <div className="flex-1 overflow-hidden">
-                <TerminalPanel />
-              </div>
+            {/* Content Area */}
+            <div className="flex-1 overflow-hidden">
+              {activeTab === 'preview' && <PreviewPanel />}
+              {activeTab === 'code' && <CodeEditor />}
             </div>
+            
+            {/* Terminal */}
+            <TerminalPanel
+              isExpanded={terminalExpanded}
+              onToggle={() => setTerminalExpanded(!terminalExpanded)}
+              height={terminalHeight}
+              onResize={handleTerminalResize}
+            />
           </Panel>
         </PanelGroup>
       </div>
