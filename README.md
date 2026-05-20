@@ -1,6 +1,9 @@
 # Atoms.dev - AI 驱动的应用生成平台
 
-<img width="1400" height="1384" alt="image" src="https://github.com/user-attachments/assets/ea427700-52a0-4fe0-991d-9acc0060bcdb" />
+<img width="2534" height="1408" alt="image" src="https://github.com/user-attachments/assets/59ddcf1a-61da-41c5-8d8d-3d051036343d" />
+<img width="2514" height="1384" alt="image" src="https://github.com/user-attachments/assets/a6698746-d619-4047-8f0a-ac7bfd5453ea" />
+
+
 
 > 🚀 用自然语言描述你的想法，AI 为你生成可运行的完整应用
 
@@ -221,27 +224,6 @@ npm run dev
 
 ---
 
-## 🐛 最近修复
-
-### v1.1.0 - 核心 Bug 修复
-
-1. **侧边栏折叠空白问题** ✅
-   - 使用 React key 强制重渲染 PanelGroup
-   - 侧边栏折叠时正确调整其他面板尺寸
-   - 支持展开/折叠状态的平滑过渡
-
-2. **保存功能不生效问题** ✅
-   - 修复 socket 事件监听逻辑
-   - 添加 previewRefreshKey 机制强制预览刷新
-   - 保存状态指示器（保存中/已保存/错误）
-   - 预览 URL 添加时间戳防缓存
-
-3. **项目沙箱共享问题** ✅
-   - 新项目创建时清空 socket 沙箱状态
-   - 每个项目独立沙箱隔离
-   - 修复项目切换时文件混乱问题
-
----
 
 ## 📖 开发文档
 
