@@ -72,6 +72,16 @@ export class IntentClassifier {
       requiresConfirmation: true
     },
     {
+      type: 'modify',
+      patterns: [
+        /(修改|更新|添加|删除|调整|改变|完善|优化|增强)/i,
+        /(项目[一二三四五六七八九十\d]+|现有的|之前的|上一次的)/i,
+        /(header|页头|导航|菜单|按钮|表单|列表)/i
+      ],
+      requiresTaskBreakdown: true,
+      requiresConfirmation: true
+    },
+    {
       type: 'consultation',
       patterns: [
         /(recommend|suggest|advise|advice|opinion|best|better)/i,
@@ -150,7 +160,8 @@ export class IntentClassifier {
       document_generation: 'Document generation request',
       refactor: 'Code refactor request',
       debug: 'Debugging request',
-      consultation: 'Consultation request'
+      consultation: 'Consultation request',
+      modify: 'Modify existing project request'
     };
 
     const shortInput = input.length > 50 ? input.substring(0, 50) + '...' : input;
@@ -174,7 +185,7 @@ export class IntentClassifier {
     // Try AI-based classification for ambiguous cases
     try {
       const intentTypes = ['question', 'code_production', 'text_generation', 
-                         'document_generation', 'refactor', 'debug', 'consultation'];
+                         'document_generation', 'refactor', 'debug', 'consultation', 'modify'];
       
       const prompt = `You are an intent classifier. Analyze the user's input and classify it into one of these types:
 ${intentTypes.map((t, i) => `${i+1}. ${t}`).join('\n')}

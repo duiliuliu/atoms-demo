@@ -9,6 +9,7 @@ export type IntentType =
   | 'document_generation' // 需要生成文档
   | 'refactor'           // 重构现有代码
   | 'debug'              // 调试代码
+  | 'modify'             // 修改现有项目
   | 'consultation';      // 技术咨询
 
 // 意图分类结果

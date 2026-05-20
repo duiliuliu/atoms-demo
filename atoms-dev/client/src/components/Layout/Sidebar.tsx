@@ -1,8 +1,8 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { useProjectStore } from '@/stores';
 import { getUserId } from '@/utils/userId';
 import { getSocket } from '@/stores';
-import { FolderOpen, Folder, Plus, Trash2, FileText, Clock, ChevronRight, ChevronDown, Edit3, Check, X, MessageSquare, XCircle } from 'lucide-react';
+import { FolderOpen, Folder, Plus, Trash2, FileText, Clock, ChevronRight, ChevronDown, Edit3, Check, X, MessageSquare, XCircle, File, Folder as FolderIcon } from 'lucide-react';
 
 interface ProjectItem {
   id: string;
@@ -12,9 +12,17 @@ interface ProjectItem {
   messages?: Array<{ id: string; role: string; content: string; timestamp: number }>;
 }
 
+interface TreeNode {
+  name: string;
+  path: string;
+  isDirectory: boolean;
+  children: TreeNode[];
+}
+
 export const Sidebar: React.FC = () => {
-  const { projects, setProjectId, setFiles, setSandboxId, setPreviewUrl } = useProjectStore();
+  const { projects, files, setProjectId, setFiles, setSandboxId, setPreviewUrl, projectId: activeProjectId, setPreviewEntryPath } = useProjectStore();
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
+  const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const [editingProject, setEditingProject] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
 
@@ -114,6 +122,89 @@ export const Sidebar: React.FC = () => {
   const getRecentMessages = (project: ProjectItem) => {
     if (!project.messages || project.messages.length === 0) return [];
     return project.messages.slice(-5).reverse();
+  };
+
+  const buildFileTree = (files: any[]): TreeNode[] => {
+    const root: TreeNode = { name: 'root', path: '', isDirectory: true, children: [] };
+    
+    files.forEach(file => {
+      const parts = file.path.split('/');
+      let current = root;
+      
+      parts.forEach((part, index) => {
+        const isLast = index === parts.length - 1;
+        const fullPath = parts.slice(0, index + 1).join('/');
+        
+        let child = current.children.find(c => c.name === part);
+        if (!child) {
+          child = { name: part, path: fullPath, isDirectory: !isLast, children: [] };
+          current.children.push(child);
+        }
+        current = child;
+      });
+    });
+    
+    return root.children.sort((a, b) => {
+      if (a.isDirectory === b.isDirectory) return a.name.localeCompare(b.name);
+      return a.isDirectory ? -1 : 1;
+    });
+  };
+
+  const fileTree = useMemo(() => buildFileTree(files), [files]);
+
+  const toggleFileExpand = (path: string) => {
+    const newExpanded = new Set(expandedFiles);
+    if (newExpanded.has(path)) {
+      newExpanded.delete(path);
+    } else {
+      newExpanded.add(path);
+    }
+    setExpandedFiles(newExpanded);
+  };
+
+  const handleSelectFile = (file: any) => {
+    setPreviewEntryPath(file.path);
+  };
+
+  const renderFileTree = (nodes: TreeNode[], depth: number = 0) => {
+    return nodes.map(node => (
+      <div key={node.path}>
+        <button
+          onClick={() => {
+            if (node.isDirectory) {
+              toggleFileExpand(node.path);
+            } else {
+              const file = files.find(f => f.path === node.path);
+              if (file) handleSelectFile(file);
+            }
+          }}
+          className="w-full px-2 py-1 text-left text-xs flex items-center gap-1 hover:bg-bg-tertiary rounded transition"
+          style={{ paddingLeft: `${depth * 12 + 8}px` }}
+        >
+          {node.isDirectory ? (
+            <>
+              {node.children.length > 0 && (
+                expandedFiles.has(node.path) ? (
+                  <ChevronDown className="w-3 h-3 text-text-muted" />
+                ) : (
+                  <ChevronRight className="w-3 h-3 text-text-muted" />
+                )
+              )}
+              <FolderIcon className="w-3 h-3 text-yellow-400" />
+            </>
+          ) : (
+            <>
+              <span className="w-3" />
+              <File className="w-3 h-3 text-text-secondary" />
+            </>
+          )}
+          <span className="truncate">{node.name}</span>
+        </button>
+        {node.isDirectory && expandedFiles.has(node.path) && node.children.length > 0 && (
+          <div>{renderFileTree(node.children, depth + 1)}</div>
+        )}
+      </div>
+    ));
   };
 
   return (
@@ -218,12 +309,22 @@ export const Sidebar: React.FC = () => {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between">
                           <span className="text-xs font-medium truncate">{project.name}</span>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); startEdit(project); }}
-                            className="p-0.5 hover:bg-bg-quaternary rounded transition opacity-0 hover:opacity-100"
-                          >
-                            <Edit3 className="w-3 h-3" />
-                          </button>
+                          <div className="flex items-center gap-0.5">
+                            <button
+                              onClick={(e) => { e.stopPropagation(); startEdit(project); }}
+                              className="p-0.5 hover:bg-blue-500/20 rounded transition text-blue-400 hover:text-blue-300"
+                              title="编辑项目名称"
+                            >
+                              <Edit3 className="w-3 h-3" />
+                            </button>
+                            <button
+                              onClick={(e) => handleDeleteProject(e, project.id)}
+                              className="p-0.5 hover:bg-red-500/20 rounded transition text-red-400 hover:text-red-300"
+                              title="删除项目"
+                            >
+                              <Trash2 className="w-3 h-3" />
+                            </button>
+                          </div>
                         </div>
                         <div className="flex items-center gap-1 mt-0.5">
                           <Clock className="w-2.5 h-2.5" />
@@ -234,38 +335,47 @@ export const Sidebar: React.FC = () => {
                       </div>
                     </>
                   )}
-                  
-                  {!isEditing && (
-                    <button
-                      onClick={(e) => handleDeleteProject(e, project.id)}
-                      className="p-0.5 hover:text-red-400 hover:bg-red-400/10 rounded transition opacity-0 hover:opacity-100"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  )}
                 </button>
 
-                {/* Expanded Content - Recent Messages */}
-                {isExpanded && !isEditing && recentMessages.length > 0 && (
-                  <div className="ml-6 mt-1 mb-1 space-y-1">
-                    <div className="px-2 py-1 text-[10px] text-text-muted uppercase tracking-wider flex items-center gap-1">
-                      <MessageSquare className="w-2.5 h-2.5" />
-                      最近会话
-                    </div>
-                    {recentMessages.map((msg) => (
-                      <div
-                        key={msg.id}
-                        className={`
-                          px-2 py-1.5 rounded text-xs truncate
-                          ${msg.role === 'user' ? 'bg-bg-tertiary text-text-secondary' : 'bg-primary/10 text-text-muted'}
-                        `}
-                      >
-                        <span className="font-medium text-[10px] mr-1">
-                          {msg.role === 'user' ? '你' : 'AI'}:
-                        </span>
-                        {msg.content.substring(0, 50)}{msg.content.length > 50 ? '...' : ''}
+                {/* Expanded Content - Recent Messages & Files */}
+                {isExpanded && !isEditing && (
+                  <div className="ml-6 mt-1 mb-1 space-y-2">
+                    {/* Files Section */}
+                    {files.length > 0 && (
+                      <div>
+                        <div className="px-2 py-1 text-[10px] text-text-muted uppercase tracking-wider flex items-center gap-1">
+                          <Folder className="w-2.5 h-2.5" />
+                          文件
+                        </div>
+                        <div className="mt-1 max-h-40 overflow-y-auto">
+                          {renderFileTree(fileTree)}
+                        </div>
                       </div>
-                    ))}
+                    )}
+                    
+                    {/* Recent Messages Section */}
+                    {recentMessages.length > 0 && (
+                      <div>
+                        <div className="px-2 py-1 text-[10px] text-text-muted uppercase tracking-wider flex items-center gap-1">
+                          <MessageSquare className="w-2.5 h-2.5" />
+                          最近会话
+                        </div>
+                        {recentMessages.map((msg) => (
+                          <div
+                            key={msg.id}
+                            className={`
+                              px-2 py-1.5 rounded text-xs truncate
+                              ${msg.role === 'user' ? 'bg-bg-tertiary text-text-secondary' : 'bg-primary/10 text-text-muted'}
+                            `}
+                          >
+                            <span className="font-medium text-[10px] mr-1">
+                              {msg.role === 'user' ? '你' : 'AI'}:
+                            </span>
+                            {msg.content.substring(0, 50)}{msg.content.length > 50 ? '...' : ''}
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>

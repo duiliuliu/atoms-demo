@@ -31,6 +31,7 @@ export class IntentHandler {
       case 'code_production':
       case 'refactor':
       case 'debug':
+      case 'modify':
         return await this.handleCodeProduction(input, classification, memory);
 
       default:

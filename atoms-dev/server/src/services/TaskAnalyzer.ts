@@ -47,6 +47,13 @@ Please reply "confirm" to proceed, or let me know if you need to make any change
   }
 
   private createDefaultBreakdown(userInput: string, context?: string): TaskBreakdown {
+    const isModifyRequest = /项目[一二三四五六七八九十\d]+|现有的|之前的|添加|更新|修改|完善|优化/.test(userInput);
+    
+    const taskType = isModifyRequest ? 'update_file' : 'create_file';
+    const taskDescription = isModifyRequest 
+      ? 'Update existing project files to add/modify features'
+      : 'Create index.html with basic structure';
+    
     return {
       id: crypto.randomUUID(),
       userIntent: {
@@ -55,14 +62,14 @@ Please reply "confirm" to proceed, or let me know if you need to make any change
         scope: 'small',
         complexity: 'simple',
         techStack: ['HTML', 'CSS', 'JavaScript'],
-        keyFeatures: ['Basic website structure'],
+        keyFeatures: [isModifyRequest ? 'Modify existing project' : 'Basic website structure'],
         potentialIssues: []
       },
       tasks: [
         {
           id: '1',
-          type: 'create_file',
-          description: 'Create index.html with basic structure',
+          type: taskType,
+          description: taskDescription,
           files: ['index.html'],
           estimatedTokens: 500,
           dependencies: [],
