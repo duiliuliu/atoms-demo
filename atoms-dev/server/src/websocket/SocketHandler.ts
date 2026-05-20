@@ -1,4 +1,5 @@
 import { Server, Socket } from 'socket.io';
+import { v4 as uuidv4 } from 'uuid';
 import { AgentService } from '../services/agent/AgentService.js';
 import { SandboxManager } from '../services/sandbox/SandboxManager.js';
 import { ProjectManager } from '../services/ProjectManager.js';
@@ -62,16 +63,34 @@ export class SocketHandler {
           socket.data.userId = userId;
           await this.projectManager.touchProject(projectId, userId);
           
-          if ((project as StoredProject).sandboxId) {
-            const sandboxId = (project as StoredProject).sandboxId!;
+          let sandboxId = (project as StoredProject).sandboxId;
+          
+          if (sandboxId) {
             const existingSandbox = this.sandboxManager.getSandbox(sandboxId);
             if (existingSandbox) {
               socket.data.sandboxId = sandboxId;
-              console.log(`[Socket] Restored sandbox for project: ${projectId}`);
+              console.log(`[Socket] Restored existing sandbox for project: ${projectId}`);
+            } else if ((project as StoredProject).files) {
+              const newSandboxId = await this.sandboxManager.create();
+              sandboxId = newSandboxId;
+              
+              for (const file of (project as StoredProject).files!) {
+                await this.sandboxManager.writeFile(sandboxId, file.path, file.content);
+              }
+              
+              socket.data.sandboxId = sandboxId;
+              
+              await this.projectManager.saveProject(projectId, userId, { sandboxId });
+              
+              console.log(`[Socket] Recreated sandbox with ${(project as StoredProject).files?.length} files`);
             }
           }
           
           socket.emit('project:loaded', { project });
+          
+          if ((project as StoredProject).messages) {
+            socket.emit('chat:restore', { messages: (project as StoredProject).messages });
+          }
           
           if ((project as StoredProject).files) {
             const files = (project as StoredProject).files?.map(f => ({
@@ -84,10 +103,9 @@ export class SocketHandler {
             socket.emit('files:list', { files });
           }
           
-          if ((project as StoredProject).sandboxId) {
-            const sandboxId = (project as StoredProject).sandboxId!;
-            const previewUrl = this.sandboxManager.getPreviewUrl(sandboxId);
-            socket.emit('preview:url', { url: previewUrl, sandboxId });
+          if (socket.data.sandboxId) {
+            const previewUrl = this.sandboxManager.getPreviewUrl(socket.data.sandboxId);
+            socket.emit('preview:url', { url: previewUrl, sandboxId: socket.data.sandboxId });
           }
         } else {
           socket.emit('project:error', { message: '项目不存在' });
@@ -122,7 +140,19 @@ export class SocketHandler {
             console.log(`[Socket] Project created: ${projectId}`);
           }
 
+          const userMessageId = uuidv4();
+          const userMessage = {
+            id: userMessageId,
+            role: 'user' as const,
+            content,
+            timestamp: Date.now()
+          };
+
           await this.memoryManager.addUserMessage(projectId, userId, content);
+          await this.projectManager.saveProject(projectId, userId, {
+            messages: [userMessage]
+          });
+
           const intentResult = await this.intentHandler.handle(content);
 
           if (intentResult.type === 'task_breakdown' && intentResult.taskBreakdown) {
@@ -135,6 +165,18 @@ export class SocketHandler {
             if (intentResult.content) {
               socket.emit('chat:chunk', { content: intentResult.content });
               await this.memoryManager.addAssistantMessage(projectId, intentResult.content);
+              
+              const assistantMessageId = crypto.randomUUID();
+              const assistantMessage = {
+                id: assistantMessageId,
+                role: 'assistant' as const,
+                content: intentResult.content,
+                timestamp: Date.now()
+              };
+              
+              await this.projectManager.saveProject(projectId, userId, {
+                messages: [assistantMessage]
+              });
             }
             socket.emit('chat:end', {});
           }

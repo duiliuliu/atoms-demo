@@ -105,9 +105,28 @@ export class ProjectManager {
     const content = fs.readFileSync(metaFile, 'utf-8');
     const project = JSON.parse(content) as StoredProject;
 
+    const finalUpdates: Partial<StoredProject> = {
+      ...updates
+    };
+
+    if (updates.messages && updates.messages.length > 0) {
+      const existingMessages = project.messages || [];
+      finalUpdates.messages = [...existingMessages, ...updates.messages];
+    }
+
+    if (updates.files && updates.files.length > 0) {
+      const existingFilesMap = new Map((project.files || []).map(f => [f.path, f]));
+      
+      for (const file of updates.files) {
+        existingFilesMap.set(file.path, file);
+      }
+      
+      finalUpdates.files = Array.from(existingFilesMap.values());
+    }
+
     const updatedProject = {
       ...project,
-      ...updates,
+      ...finalUpdates,
       id: project.id,
       userId: project.userId,
       createdAt: project.createdAt,

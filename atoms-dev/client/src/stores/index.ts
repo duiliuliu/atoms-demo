@@ -408,6 +408,15 @@ export function initSocket(): Socket {
     });
   });
   
+  socket.on('chat:restore', (data: { messages: Array<{ id: string; role: string; content: string; timestamp: number }> }) => {
+    useChatStore.setState({ messages: data.messages.map(m => ({
+      id: m.id,
+      role: m.role === 'user' ? 'user' : 'ai',
+      content: m.content,
+      timestamp: m.timestamp
+    })) });
+  });
+  
   socket.on('agent:status', (data: { message: string; type: string }) => {
     useStatusStore.getState().setStatus({
       message: data.message,
