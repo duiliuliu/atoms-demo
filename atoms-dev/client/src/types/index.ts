@@ -16,7 +16,7 @@ export interface FileInfo {
 
 export interface TerminalLine {
   id: string;
-  type: 'command' | 'stdout' | 'stderr' | 'error';
+  type: 'command' | 'stdout' | 'stderr' | 'error' | 'log' | 'info' | 'warn';
   content: string;
   timestamp: number;
 }

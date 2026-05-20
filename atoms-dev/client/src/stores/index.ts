@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import { io, Socket } from 'socket.io-client';
 import { Message, FileInfo, TerminalLine, AgentStatus, LLMProvider, TabType } from '@/types';
+import { getUserId, setLastProjectId } from '@/utils/userId';
 
 interface ChatStore {
   messages: Message[];
@@ -9,16 +10,91 @@ interface ChatStore {
   clearMessages: () => void;
 }
 
+interface Task {
+  id: string;
+  type: string;
+  description: string;
+  files: string[];
+  estimatedTokens: number;
+  dependencies: string[];
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+}
+
+interface UserIntent {
+  originalRequest: string;
+  understoodGoal: string;
+  scope: 'small' | 'medium' | 'large';
+  complexity: 'simple' | 'moderate' | 'complex';
+  techStack: string[];
+  keyFeatures: string[];
+  potentialIssues?: string[];
+}
+
+interface TaskBreakdown {
+  id: string;
+  userIntent: UserIntent;
+  tasks: Task[];
+  totalEstimatedTokens: number;
+  createdAt: number;
+  status: 'pending' | 'confirmed' | 'modified' | 'executing' | 'completed';
+}
+
+interface IntentClassification {
+  type: string;
+  confidence: number;
+  requiresTaskBreakdown: boolean;
+  requiresConfirmation: boolean;
+  summary: string;
+  keywords: string[];
+}
+
+interface ProjectListItem {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  lastVisitedAt: number;
+}
+
 interface ProjectStore {
   files: FileInfo[];
   activeFile: FileInfo | null;
   previewUrl: string;
   sandboxId: string | null;
+  projectId: string | null;
+  projects: ProjectListItem[];
+  previewEntryPath: string;
+  previewRefreshKey: number;
   setFiles: (files: FileInfo[]) => void;
   setActiveFile: (path: string) => void;
   updateFile: (path: string, content: string) => void;
   setPreviewUrl: (url: string) => void;
   setSandboxId: (id: string) => void;
+  setProjectId: (id: string | null) => void;
+  setProjects: (projects: ProjectListItem[]) => void;
+  setPreviewEntryPath: (path: string) => void;
+  refreshPreview: () => void;
+}
+
+interface ExecutingTask {
+  id: string;
+  description: string;
+  status: 'pending' | 'in_progress' | 'completed' | 'failed';
+  output?: string;
+  createdAt: number;
+}
+
+interface TaskStore {
+  currentBreakdown: TaskBreakdown | null;
+  showTaskPanel: boolean;
+  executingTasks: ExecutingTask[];
+  setTaskBreakdown: (breakdown: TaskBreakdown | null) => void;
+  setShowTaskPanel: (show: boolean) => void;
+  confirmTasks: () => void;
+  cancelTasks: () => void;
+  startTaskExecution: (tasks: Task[]) => void;
+  updateTaskStatus: (taskId: string, status: ExecutingTask['status'], output?: string) => void;
+  clearExecutingTasks: () => void;
 }
 
 interface UIStore {
@@ -49,27 +125,98 @@ interface StatusStore {
 export const useChatStore = create<ChatStore>((set) => ({
   messages: [],
   isLoading: false,
-  
+
   sendMessage: (content: string) => {
     const socket = getSocket();
     if (!socket) return;
-    
+
+    const userId = getUserId();
+    const projectId = useProjectStore.getState().projectId;
     const userMessage: Message = {
       id: crypto.randomUUID(),
       role: 'user',
       content,
       timestamp: Date.now(),
     };
-    
+
     set((state) => ({
       messages: [...state.messages, userMessage],
       isLoading: true,
     }));
-    
-    socket.emit('chat:message', { content });
+
+    socket.emit('chat:message', { 
+      content, 
+      userId,
+      projectId
+    });
   },
-  
+
   clearMessages: () => set({ messages: [] }),
+}));
+
+// Task Store
+export const useTaskStore = create<TaskStore>((set, get) => ({
+  currentBreakdown: null,
+  showTaskPanel: false,
+  executingTasks: [],
+
+  setTaskBreakdown: (breakdown) =>
+    set({ currentBreakdown: breakdown, showTaskPanel: !!breakdown }),
+
+  setShowTaskPanel: (show) => set({ showTaskPanel: show }),
+
+  confirmTasks: () => {
+    const socket = getSocket();
+    const current = get().currentBreakdown;
+    if (socket) {
+      socket.emit('task:confirm');
+      useChatStore.setState({ isLoading: true });
+      
+      if (current) {
+        const tasks = current.tasks.map(task => ({
+          id: task.id,
+          description: task.description,
+          status: 'pending' as const,
+          createdAt: Date.now(),
+        }));
+        set({ 
+          currentBreakdown: null, 
+          showTaskPanel: false,
+          executingTasks: tasks 
+        });
+      } else {
+        set({ currentBreakdown: null, showTaskPanel: false });
+      }
+    }
+  },
+
+  cancelTasks: () => {
+    const socket = getSocket();
+    if (socket) {
+      socket.emit('task:cancel');
+    }
+    set({ currentBreakdown: null, showTaskPanel: false, executingTasks: [] });
+  },
+
+  startTaskExecution: (tasks) => {
+    const executingTasks = tasks.map(task => ({
+      id: task.id,
+      description: task.description,
+      status: 'pending' as const,
+      createdAt: Date.now(),
+    }));
+    set({ executingTasks });
+  },
+
+  updateTaskStatus: (taskId, status, output) => {
+    set(state => ({
+      executingTasks: state.executingTasks.map(task =>
+        task.id === taskId ? { ...task, status, output: output || task.output } : task
+      )
+    }));
+  },
+
+  clearExecutingTasks: () => set({ executingTasks: [] }),
 }));
 
 // Project Store
@@ -78,14 +225,28 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   activeFile: null,
   previewUrl: '',
   sandboxId: null,
-  
-  setFiles: (files) => set({ files }),
-  
+  projectId: null,
+  projects: [],
+  previewEntryPath: '',
+  previewRefreshKey: 0,
+
+  setFiles: (files) => {
+    // 设置文件时，如果没有预览入口，自动选择第一个 HTML 文件
+    const htmlFiles = files.filter(f => 
+      f.name.toLowerCase().endsWith('.html') || f.name.toLowerCase().endsWith('.htm')
+    );
+    const currentPath = get().previewEntryPath;
+    const newPreviewPath = !currentPath && htmlFiles.length > 0 
+      ? htmlFiles[0].path 
+      : currentPath;
+    set({ files, previewEntryPath: newPreviewPath });
+  },
+
   setActiveFile: (path) => {
     const file = get().files.find((f) => f.path === path);
     set({ activeFile: file || null });
   },
-  
+
   updateFile: (path, content) => {
     set((state) => ({
       files: state.files.map((f) =>
@@ -97,10 +258,27 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
           : state.activeFile,
     }));
   },
-  
+
   setPreviewUrl: (url) => set({ previewUrl: url }),
-  
+
   setSandboxId: (id) => set({ sandboxId: id }),
+
+  setProjectId: (id) => {
+    if (id) {
+      setLastProjectId(id);
+    }
+    set({ projectId: id });
+  },
+
+  setProjects: (projects) => set({ projects }),
+
+  setPreviewEntryPath: (path) => set({ previewEntryPath: path }),
+
+  refreshPreview: () => {
+    set((state) => ({ 
+      previewRefreshKey: state.previewRefreshKey + 1 
+    }));
+  },
 }));
 
 // UI Store
@@ -188,6 +366,12 @@ export function initSocket(): Socket {
   
   socket.on('connect', () => {
     console.log('[Socket] Connected');
+    
+    // 连接成功后请求项目列表
+    const userId = getUserId();
+    if (userId && socket) {
+      socket.emit('project:list', { userId });
+    }
   });
   
   socket.on('disconnect', () => {
@@ -238,11 +422,45 @@ export function initSocket(): Socket {
     });
   });
   
+  socket.on('chat:restore', (data: { messages: Array<{ id: string; role: string; content: string; timestamp: number }> }) => {
+    useChatStore.setState({ messages: data.messages.map(m => ({
+      id: m.id,
+      role: m.role === 'user' ? 'user' : 'ai',
+      content: m.content,
+      timestamp: m.timestamp
+    })) });
+  });
+  
   socket.on('agent:status', (data: { message: string; type: string }) => {
     useStatusStore.getState().setStatus({
       message: data.message,
       type: data.type as AgentStatus['type'],
     });
+    
+    // 模拟任务状态更新
+    const taskStore = useTaskStore.getState();
+    const tasks = taskStore.executingTasks;
+    
+    if (tasks.length > 0) {
+      // 找到第一个 pending 或 in_progress 的任务
+      let taskUpdated = false;
+      for (let i = 0; i < tasks.length && !taskUpdated; i++) {
+        const task = tasks[i];
+        
+        if (task.status === 'pending') {
+          // 将第一个 pending 任务标记为 in_progress
+          taskStore.updateTaskStatus(task.id, 'in_progress', '开始执行...');
+          taskUpdated = true;
+        } else if (task.status === 'in_progress') {
+          // 根据状态消息判断是否完成
+          if (data.message.includes('创建') || data.message.includes('完成')) {
+            taskStore.updateTaskStatus(task.id, 'completed', 
+              `${task.description}\n执行结果：\n${data.message}`);
+            taskUpdated = true;
+          }
+        }
+      }
+    }
   });
   
   socket.on('sandbox:created', (data: { sandboxId: string; previewUrl: string }) => {
@@ -270,6 +488,11 @@ export function initSocket(): Socket {
     useProjectStore.getState().setPreviewUrl(data.url);
   });
   
+  socket.on('preview:auto', (data: { sandboxId: string; previewUrl: string; entryFile: string }) => {
+    useProjectStore.getState().setPreviewUrl(data.previewUrl);
+    useUIStore.getState().setActiveTab('preview');
+  });
+  
   socket.on('agent:command', (data: { command: string }) => {
     useTerminalStore.getState().addLine({
       type: 'command',
@@ -295,7 +518,94 @@ export function initSocket(): Socket {
   socket.on('llm:provider', (data: { provider: string }) => {
     useUIStore.getState().setCurrentProvider(data.provider as LLMProvider);
   });
-  
+
+  socket.on('task:breakdown', (data: { taskBreakdown: TaskBreakdown; classification: IntentClassification }) => {
+    useChatStore.setState({ isLoading: false });
+    useTaskStore.getState().setTaskBreakdown(data.taskBreakdown);
+  });
+
+  // 当聊天结束时，将所有任务标记为完成
+  socket.on('chat:end', () => {
+    useChatStore.setState({ isLoading: false });
+    
+    const taskStore = useTaskStore.getState();
+    const tasks = taskStore.executingTasks;
+    tasks.forEach(task => {
+      if (task.status !== 'completed') {
+        taskStore.updateTaskStatus(task.id, 'completed', task.output || '任务执行完成');
+      }
+    });
+    
+    const projectStore = useProjectStore.getState();
+    if (projectStore.sandboxId) {
+      socket?.emit('files:list');
+      socket?.emit('preview:get_url');
+    }
+  });
+
+  socket.on('project:list', (data: { projects: ProjectListItem[] }) => {
+    useProjectStore.getState().setProjects(data.projects);
+  });
+
+  socket.on('project:created', (data: { project: any }) => {
+    useProjectStore.getState().setProjectId(data.project.id);
+    useProjectStore.getState().setSandboxId(data.project.sandboxId);
+    
+    // 刷新项目列表
+    const userId = getUserId();
+    if (userId && socket) {
+      socket.emit('project:list', { userId });
+    }
+  });
+
+  socket.on('project:loaded', (data: { project: any }) => {
+    useProjectStore.getState().setProjectId(data.project.id);
+    useProjectStore.getState().setSandboxId(data.project.sandboxId);
+    
+    // 重置预览入口路径
+    useProjectStore.getState().setPreviewEntryPath('');
+    
+    // 设置文件列表
+    if (data.project.files && data.project.files.length > 0) {
+      useProjectStore.getState().setFiles(data.project.files);
+    } else {
+      useProjectStore.getState().setFiles([]);
+    }
+    
+    // 清除并重置聊天记录
+    useChatStore.getState().clearMessages();
+    if (data.project.messages && data.project.messages.length > 0) {
+      useChatStore.setState({ messages: data.project.messages.map((m: { id: string; role: string; content: string; timestamp: number }) => ({
+        id: m.id,
+        role: m.role === 'user' ? 'user' : 'ai',
+        content: m.content,
+        timestamp: m.timestamp
+      })) });
+    }
+    
+    // 如果有沙箱 ID，请求文件列表和预览 URL
+    if (data.project.sandboxId && socket) {
+      socket.emit('files:list');
+      socket.emit('preview:get_url');
+      useUIStore.getState().setActiveTab('preview');
+    }
+  });
+
+  socket.on('project:deleted', () => {
+    // 刷新项目列表
+    const userId = getUserId();
+    if (userId && socket) {
+      socket.emit('project:list', { userId });
+    }
+  });
+
+  socket.on('project:error', (data: { message: string }) => {
+    useStatusStore.getState().setStatus({
+      message: data.message,
+      type: 'error',
+    });
+  });
+
   return socket;
 }
 

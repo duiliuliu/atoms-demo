@@ -1,6 +1,7 @@
 import { EventEmitter } from 'events';
 import { LLMService } from '../llm/LLMService.js';
 import { SandboxManager } from '../sandbox/SandboxManager.js';
+import { MemoryManager } from '../MemoryManager.js';
 
 interface AgentConfig {
   model?: string;
@@ -16,11 +17,13 @@ interface CodeBlock {
 export class AgentService extends EventEmitter {
   private llm: LLMService;
   private sandbox: SandboxManager;
+  private memoryManager: MemoryManager;
   
   constructor(config: AgentConfig = {}) {
     super();
     this.llm = new LLMService();
     this.sandbox = new SandboxManager();
+    this.memoryManager = new MemoryManager();
   }
   
   async processRequest(
@@ -28,6 +31,9 @@ export class AgentService extends EventEmitter {
     context: {
       files?: Map<string, string>;
       sandboxId?: string;
+      projectId?: string;
+      userId?: string;
+      memory?: string;
     }
   ): Promise<AsyncIterable<string>> {
     const self = this;
@@ -37,11 +43,12 @@ export class AgentService extends EventEmitter {
         try {
           self.emit('status', { message: '正在理解您的需求...', type: 'info' });
           
-          const prompt = self.buildPrompt(userInput, context);
+          const prompt = await self.buildPrompt(userInput, context);
           const stream = await self.llm.stream(prompt);
           
           let buffer = '';
           let sandboxId = context.sandboxId;
+          let hasCreatedHtml = false;
           
           for await (const chunk of stream) {
             buffer += chunk;
@@ -56,12 +63,29 @@ export class AgentService extends EventEmitter {
                 // 创建或使用沙箱
                 if (!sandboxId) {
                   sandboxId = await self.sandbox.create();
-                  self.emit('sandbox_created', { sandboxId, previewUrl: self.sandbox.getPreviewUrl(sandboxId) });
+                  const previewUrl = self.sandbox.getPreviewUrl(sandboxId) || '';
+                  self.emit('sandbox_created', { sandboxId, previewUrl });
                 }
                 
                 // 写入文件
                 await self.sandbox.writeFile(sandboxId, block.path, block.content);
                 self.emit('file_created', { path: block.path, sandboxId });
+                
+                // 如果是HTML文件且还没有触发过预览，则自动触发预览
+                if (block.path.endsWith('.html') && !hasCreatedHtml) {
+                  hasCreatedHtml = true;
+                  // 延迟一点触发预览，确保文件已经写入完成
+                  setTimeout(() => {
+                    if (sandboxId) {
+                      const previewUrl = self.sandbox.getPreviewUrl(sandboxId) || '';
+                      self.emit('auto_preview', { 
+                        sandboxId, 
+                        previewUrl,
+                        entryFile: block.path 
+                      });
+                    }
+                  }, 500);
+                }
               }
               
               // 清空已处理的代码块
@@ -91,18 +115,25 @@ export class AgentService extends EventEmitter {
     };
   }
   
-  private buildPrompt(userInput: string, context: any): string {
+  private async buildPrompt(userInput: string, context: any): Promise<string> {
     const fileList = context.files
       ? Array.from(context.files.keys()).join(', ')
       : '空项目';
+    
+    let memoryStr = '';
+    if (context.memory) {
+      memoryStr = `\n\n## 记忆信息\n${context.memory}`;
+    }
     
     return `你是 Atoms.dev 的 AI 助手，擅长根据用户需求生成代码。
 
 当前项目已有文件: ${fileList || '无'}
 
+${memoryStr}
+
 用户需求: ${userInput}
 
-请根据用户需求生成完整的代码。对于简单的 HTML/CSS/JS 项目，请生成单个 HTML 文件。
+请根据用户需求和记忆信息生成完整的代码。对于简单的 HTML/CSS/JS 项目，请生成单个 HTML 文件。
 对于更复杂的项目，请生成合适的文件结构。
 
 重要规则：
@@ -111,6 +142,7 @@ export class AgentService extends EventEmitter {
 3. 使用内联样式或 <style> 标签
 4. 使用内联脚本或 <script> 标签
 5. 如果需要框架，优先使用原生 JavaScript 或简化的实现
+6. 请参考记忆信息中的历史对话，保持对话连贯性
 
 请直接输出代码，不需要解释。如果要创建文件，使用以下格式：
 \`\`\`file
@@ -190,7 +222,11 @@ export class AgentService extends EventEmitter {
   getSandboxManager(): SandboxManager {
     return this.sandbox;
   }
-  
+
+  getLLMService(): LLMService {
+    return this.llm;
+  }
+
   setLLMProvider(provider: 'deepseek' | 'zhipu'): void {
     this.llm.setProvider(provider);
   }
