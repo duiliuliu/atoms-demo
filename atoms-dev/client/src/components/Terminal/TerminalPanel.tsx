@@ -116,21 +116,6 @@ export const TerminalPanel: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-bg-primary">
-      {/* Toolbar */}
-      <div className="h-10 bg-bg-secondary border-b border-border flex items-center justify-between px-3">
-        <div className="flex items-center gap-2">
-          <TerminalIcon className="w-4 h-4 text-text-secondary" />
-          <span className="text-xs text-text-secondary">终端</span>
-        </div>
-        <button
-          onClick={clearLines}
-          className="p-1.5 hover:bg-bg-tertiary rounded transition"
-          title="清空"
-        >
-          <Trash2 className="w-4 h-4 text-text-secondary" />
-        </button>
-      </div>
-
       {/* Terminal */}
       <div className="flex-1 overflow-hidden p-2">
         <div

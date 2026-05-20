@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useProjectStore } from '@/stores';
 import { getUserId } from '@/utils/userId';
 import { getSocket } from '@/stores';
-import { FolderOpen, Folder, Plus, Trash2, FileText, Clock, ChevronRight, ChevronDown, Edit3, Check, X, MessageSquare, XCircle, File, Folder as FolderIcon } from 'lucide-react';
+import { FolderOpen, Folder, Plus, Trash2, FileText, Clock, ChevronRight, ChevronDown, Edit3, Check, X, MessageSquare, File, Folder as FolderIcon } from 'lucide-react';
 
 interface ProjectItem {
   id: string;
@@ -25,11 +25,6 @@ export const Sidebar: React.FC = () => {
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const [editingProject, setEditingProject] = useState<string | null>(null);
   const [editValue, setEditValue] = useState('');
-
-  const handleClose = () => {
-    const event = new CustomEvent('toggle-project-panel', { detail: { show: false } });
-    window.dispatchEvent(event);
-  };
 
   useEffect(() => {
     const socket = getSocket();
@@ -208,7 +203,7 @@ export const Sidebar: React.FC = () => {
   };
 
   return (
-    <div className="w-64 bg-bg-secondary border-r border-border flex flex-col h-full">
+    <div className="w-full bg-bg-secondary border-r border-border flex flex-col h-full">
       {/* Header */}
       <div className="p-4 border-b border-border">
         <div className="flex items-center justify-between">
@@ -216,22 +211,13 @@ export const Sidebar: React.FC = () => {
             <FolderOpen className="w-4 h-4 text-primary" />
             <span className="text-sm font-semibold">项目列表</span>
           </div>
-          <div className="flex items-center gap-2">
-            <button
-              onClick={handleCreateProject}
-              className="p-1.5 hover:bg-bg-tertiary rounded-md transition flex items-center gap-1 text-xs text-text-secondary hover:text-white"
-              title="创建新项目"
-            >
-              <Plus className="w-3.5 h-3.5" />
-            </button>
-            <button
-              onClick={handleClose}
-              className="p-1.5 hover:bg-bg-tertiary rounded-md transition flex items-center gap-1 text-xs text-text-secondary hover:text-white"
-              title="关闭"
-            >
-              <XCircle className="w-3.5 h-3.5" />
-            </button>
-          </div>
+          <button
+            onClick={handleCreateProject}
+            className="p-1.5 hover:bg-bg-tertiary rounded-md transition flex items-center gap-1 text-xs text-text-secondary hover:text-white"
+            title="创建新项目"
+          >
+            <Plus className="w-3.5 h-3.5" />
+          </button>
         </div>
       </div>
 
