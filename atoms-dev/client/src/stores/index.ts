@@ -360,7 +360,7 @@ export function initSocket(): Socket {
     
     // 连接成功后请求项目列表
     const userId = getUserId();
-    if (userId) {
+    if (userId && socket) {
       socket.emit('project:list', { userId });
     }
   });
@@ -544,7 +544,7 @@ export function initSocket(): Socket {
     
     // 刷新项目列表
     const userId = getUserId();
-    if (userId) {
+    if (userId && socket) {
       socket.emit('project:list', { userId });
     }
   });
@@ -566,7 +566,7 @@ export function initSocket(): Socket {
     // 清除并重置聊天记录
     useChatStore.getState().clearMessages();
     if (data.project.messages && data.project.messages.length > 0) {
-      useChatStore.setState({ messages: data.project.messages.map(m => ({
+      useChatStore.setState({ messages: data.project.messages.map((m: { id: string; role: string; content: string; timestamp: number }) => ({
         id: m.id,
         role: m.role === 'user' ? 'user' : 'ai',
         content: m.content,
@@ -575,17 +575,17 @@ export function initSocket(): Socket {
     }
     
     // 如果有沙箱 ID，请求文件列表和预览 URL
-    if (data.project.sandboxId) {
+    if (data.project.sandboxId && socket) {
       socket.emit('files:list');
       socket.emit('preview:get_url');
       useUIStore.getState().setActiveTab('preview');
     }
   });
 
-  socket.on('project:deleted', (data: { projectId: string }) => {
+  socket.on('project:deleted', () => {
     // 刷新项目列表
     const userId = getUserId();
-    if (userId) {
+    if (userId && socket) {
       socket.emit('project:list', { userId });
     }
   });

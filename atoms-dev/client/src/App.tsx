@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { Header } from './components/Layout/Header';
 import { ChatContainer } from './components/Chat/ChatContainer';
@@ -24,6 +24,10 @@ function App() {
     setTerminalHeight(height);
   };
 
+  const handleSidebarToggle = useCallback(() => {
+    setSidebarCollapsed(prev => !prev);
+  }, []);
+
   return (
     <div className="flex flex-col h-screen bg-bg-primary">
       <Header />
@@ -35,11 +39,11 @@ function App() {
             defaultSize={sidebarCollapsed ? 5 : 20}
             minSize={5}
             maxSize={30}
-            className="flex flex-col relative"
+            className="flex flex-col"
           >
             <Sidebar 
               isCollapsed={sidebarCollapsed} 
-              onToggle={() => setSidebarCollapsed(!sidebarCollapsed)} 
+              onToggle={handleSidebarToggle} 
             />
           </Panel>
           

@@ -25,7 +25,7 @@ interface SidebarProps {
 }
 
 export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
-  const { projects, files, setProjectId, setFiles, setSandboxId, setPreviewUrl, projectId: activeProjectId, setPreviewEntryPath } = useProjectStore();
+  const { projects, files, setPreviewEntryPath } = useProjectStore();
   const [expandedProjects, setExpandedProjects] = useState<Set<string>>(new Set());
   const [expandedFiles, setExpandedFiles] = useState<Set<string>>(new Set());
   const [editingProject, setEditingProject] = useState<string | null>(null);
@@ -131,7 +131,7 @@ export const Sidebar: React.FC<SidebarProps> = ({ isCollapsed, onToggle }) => {
       const parts = file.path.split('/');
       let current = root;
       
-      parts.forEach((part, index) => {
+      parts.forEach((part: string, index: number) => {
         const isLast = index === parts.length - 1;
         const fullPath = parts.slice(0, index + 1).join('/');
         

@@ -1,11 +1,11 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect } from 'react';
 import { useProjectStore } from '@/stores';
 import { getUserId } from '@/utils/userId';
 import { FolderOpen, Plus, Clock, Trash2, FileText } from 'lucide-react';
 import { getSocket } from '@/stores';
 
 export const ProjectList: React.FC = () => {
-  const { projects, setProjectId } = useProjectStore();
+  const { projects } = useProjectStore();
 
   useEffect(() => {
     const socket = getSocket();
