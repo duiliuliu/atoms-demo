@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import { Panel, PanelGroup, PanelResizeHandle } from 'react-resizable-panels';
 import { Header } from './components/Layout/Header';
 import { ChatContainer } from './components/Chat/ChatContainer';
@@ -20,6 +20,9 @@ function App() {
   const [terminalExpanded, setTerminalExpanded] = useState(false);
   const [terminalHeight, setTerminalHeight] = useState(150);
 
+  // 使用 key 来强制重新渲染 PanelGroup，解决折叠后空白问题
+  const panelGroupKey = useMemo(() => `panel-group-${sidebarCollapsed ? 'collapsed' : 'expanded'}`, [sidebarCollapsed]);
+
   const handleTerminalResize = (height: number) => {
     setTerminalHeight(height);
   };
@@ -33,27 +36,40 @@ function App() {
       <Header />
       
       <div className="flex-1 overflow-hidden flex">
-        <PanelGroup direction="horizontal" className="h-full">
+        <PanelGroup key={panelGroupKey} direction="horizontal" className="h-full">
           {/* 左侧：项目列表 */}
-          <Panel
-            defaultSize={sidebarCollapsed ? 5 : 20}
-            minSize={5}
-            maxSize={30}
-            className="flex flex-col"
-          >
-            <Sidebar 
-              isCollapsed={sidebarCollapsed} 
-              onToggle={handleSidebarToggle} 
-            />
-          </Panel>
-          
-          <PanelResizeHandle className="w-1 bg-border hover:bg-primary transition-colors cursor-col-resize" />
+          {!sidebarCollapsed ? (
+            <>
+              <Panel
+                defaultSize={20}
+                minSize={15}
+                maxSize={30}
+                className="flex flex-col"
+              >
+                <Sidebar 
+                  isCollapsed={sidebarCollapsed} 
+                  onToggle={handleSidebarToggle} 
+                />
+              </Panel>
+              <PanelResizeHandle className="w-1 bg-border hover:bg-primary transition-colors cursor-col-resize" />
+            </>
+          ) : (
+            <div 
+              className="flex flex-col border-r border-border"
+              style={{ width: '48px' }}
+            >
+              <Sidebar 
+                isCollapsed={sidebarCollapsed} 
+                onToggle={handleSidebarToggle} 
+              />
+            </div>
+          )}
           
           {/* 中间：聊天区域 */}
           <Panel
-            defaultSize={35}
+            defaultSize={sidebarCollapsed ? 40 : 35}
             minSize={25}
-            maxSize={50}
+            maxSize={60}
             className="flex flex-col"
           >
             <ChatContainer />
@@ -63,7 +79,7 @@ function App() {
           
           {/* 右侧：预览+代码+终端 */}
           <Panel
-            defaultSize={45}
+            defaultSize={sidebarCollapsed ? 60 : 45}
             minSize={30}
             className="flex flex-col"
           >

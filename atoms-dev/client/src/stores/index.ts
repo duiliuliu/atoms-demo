@@ -64,6 +64,7 @@ interface ProjectStore {
   projectId: string | null;
   projects: ProjectListItem[];
   previewEntryPath: string;
+  previewRefreshKey: number;
   setFiles: (files: FileInfo[]) => void;
   setActiveFile: (path: string) => void;
   updateFile: (path: string, content: string) => void;
@@ -72,6 +73,7 @@ interface ProjectStore {
   setProjectId: (id: string | null) => void;
   setProjects: (projects: ProjectListItem[]) => void;
   setPreviewEntryPath: (path: string) => void;
+  refreshPreview: () => void;
 }
 
 interface ExecutingTask {
@@ -226,9 +228,10 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   projectId: null,
   projects: [],
   previewEntryPath: '',
+  previewRefreshKey: 0,
 
   setFiles: (files) => {
-    // 设置文件时，如果没有预览入口，自动选择第一个HTML文件
+    // 设置文件时，如果没有预览入口，自动选择第一个 HTML 文件
     const htmlFiles = files.filter(f => 
       f.name.toLowerCase().endsWith('.html') || f.name.toLowerCase().endsWith('.htm')
     );
@@ -270,6 +273,12 @@ export const useProjectStore = create<ProjectStore>((set, get) => ({
   setProjects: (projects) => set({ projects }),
 
   setPreviewEntryPath: (path) => set({ previewEntryPath: path }),
+
+  refreshPreview: () => {
+    set((state) => ({ 
+      previewRefreshKey: state.previewRefreshKey + 1 
+    }));
+  },
 }));
 
 // UI Store

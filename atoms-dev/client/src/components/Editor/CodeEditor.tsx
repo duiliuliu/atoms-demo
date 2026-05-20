@@ -1,12 +1,33 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Editor from '@monaco-editor/react';
 import { useProjectStore, getSocket } from '@/stores';
 import { FileCode, FolderOpen, Save, Check, AlertCircle } from 'lucide-react';
 
 export const CodeEditor: React.FC = () => {
-  const { files, activeFile, setActiveFile, updateFile, setPreviewUrl, sandboxId } = useProjectStore();
+  const { files, activeFile, setActiveFile, updateFile, refreshPreview } = useProjectStore();
   const [isSaving, setIsSaving] = useState(false);
   const [saveStatus, setSaveStatus] = useState<'idle' | 'saved' | 'error'>('idle');
+
+  // 监听文件更新事件
+  useEffect(() => {
+    const socket = getSocket();
+    if (!socket) {
+      return;
+    }
+
+    const handleFileUpdated = () => {
+      setSaveStatus('saved');
+      setIsSaving(false);
+      refreshPreview();
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    };
+
+    socket.on('file:updated', handleFileUpdated);
+    
+    return () => {
+      socket.off('file:updated', handleFileUpdated);
+    };
+  }, [refreshPreview]);
 
   const handleEditorChange = (value: string | undefined) => {
     if (value && activeFile) {
@@ -15,39 +36,24 @@ export const CodeEditor: React.FC = () => {
     }
   };
 
-  const handleSave = async () => {
+  const handleSave = () => {
     if (!activeFile) return;
 
     setIsSaving(true);
     const socket = getSocket();
 
     try {
-      await new Promise<void>((resolve, reject) => {
-        if (!socket) {
-          reject(new Error('Socket not connected'));
-          return;
-        }
-        socket.emit('file:update', { path: activeFile.path, content: activeFile.content }, (error?: string) => {
-          if (error) {
-            reject(new Error(error));
-          } else {
-            resolve();
-          }
-        });
-      });
-
-      if (sandboxId) {
-        const previewUrl = `/preview/${sandboxId}/${activeFile.path}`;
-        setPreviewUrl(previewUrl);
+      if (!socket) {
+        throw new Error('Socket not connected');
       }
-
-      setSaveStatus('saved');
-      setTimeout(() => setSaveStatus('idle'), 2000);
+      
+      socket.emit('file:update', { path: activeFile.path, content: activeFile.content });
+      
     } catch (error) {
+      console.error('[Save] Error:', error);
+      setIsSaving(false);
       setSaveStatus('error');
       setTimeout(() => setSaveStatus('idle'), 2000);
-    } finally {
-      setIsSaving(false);
     }
   };
 
@@ -105,13 +111,13 @@ export const CodeEditor: React.FC = () => {
             title="保存文件"
           >
             {isSaving ? (
-              <Save className="w-3 h-3 animate-spin" />
+              <Save className="w-3.5 h-3.5 animate-spin" />
             ) : saveStatus === 'saved' ? (
-              <Check className="w-3 h-3 text-green-400" />
+              <Check className="w-3.5 h-3.5 text-green-400" />
             ) : saveStatus === 'error' ? (
-              <AlertCircle className="w-3 h-3 text-red-400" />
+              <AlertCircle className="w-3.5 h-3.5 text-red-400" />
             ) : (
-              <Save className="w-3 h-3" />
+              <Save className="w-3.5 h-3.5" />
             )}
           </button>
         </div>

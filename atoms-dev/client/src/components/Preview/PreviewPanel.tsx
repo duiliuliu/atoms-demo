@@ -3,21 +3,21 @@ import { useProjectStore } from '@/stores';
 import { getBackendUrl } from '@/stores';
 
 export const PreviewPanel: React.FC = () => {
-  const { previewUrl, sandboxId, previewEntryPath } = useProjectStore();
+  const { previewUrl, sandboxId, previewEntryPath, previewRefreshKey } = useProjectStore();
   const [key, setKey] = useState(0);
 
   useEffect(() => {
     setKey(k => k + 1);
-  }, [sandboxId]);
+  }, [sandboxId, previewRefreshKey]);
 
   const getFullPreviewUrl = () => {
     if (!previewUrl || !sandboxId) return null;
     
     if (previewEntryPath && sandboxId) {
-      return `${getBackendUrl()}/preview/${sandboxId}/${previewEntryPath}`;
+      return `${getBackendUrl()}/preview/${sandboxId}/${previewEntryPath}?t=${Date.now()}`;
     }
     
-    return `${getBackendUrl()}${previewUrl}`;
+    return `${getBackendUrl()}${previewUrl}?t=${Date.now()}`;
   };
 
   const fullUrl = getFullPreviewUrl();
