@@ -204,9 +204,39 @@ export class SocketHandler {
         }
 
         try {
-          let sandboxId = socket.data.sandboxId;
           const userId = socket.data.userId;
-          const projectId = socket.data.projectId;
+          let targetProjectId = socket.data.projectId;
+          let sandboxId = socket.data.sandboxId;
+
+          const keyFeatures = taskBreakdown.userIntent.keyFeatures || [];
+          const modifyMatch = keyFeatures.find(f => f.includes('修改项目'));
+          let targetProjectName: string | null = null;
+          
+          if (modifyMatch) {
+            const match = modifyMatch.match(/「(.+?)」/);
+            if (match) {
+              targetProjectName = match[1];
+            }
+          }
+
+          if (targetProjectName && userId) {
+            const projects = await this.projectManager.listProjects(userId);
+            const targetProject = projects.find(p => p.name === targetProjectName);
+            
+            if (targetProject) {
+              targetProjectId = targetProject.id;
+              socket.data.projectId = targetProjectId;
+              
+              const existingSandboxes = this.sandboxManager.listSandboxes();
+              const existingSandbox = existingSandboxes.find(s => 
+                s.rootDir.includes(targetProjectId)
+              );
+              if (existingSandbox) {
+                sandboxId = existingSandbox.id;
+                socket.data.sandboxId = sandboxId;
+              }
+            }
+          }
 
           let files: Map<string, string> | undefined;
           if (sandboxId) {
@@ -218,14 +248,14 @@ export class SocketHandler {
 
           const userRequest = taskBreakdown.userIntent.originalRequest;
           
-          const compressedMemory = await this.memoryManager.getCompressedMemory(userId, projectId);
+          const compressedMemory = await this.memoryManager.getCompressedMemory(userId, targetProjectId);
 
           const stream = await this.agentService.processRequest(
             userRequest,
             { 
               sandboxId, 
               files,
-              projectId,
+              projectId: targetProjectId,
               userId,
               memory: compressedMemory
             }
@@ -239,8 +269,8 @@ export class SocketHandler {
 
           socket.emit('chat:end', {});
 
-          if (projectId && userId) {
-            await this.memoryManager.addMessageWithCompression(projectId, userId, userRequest, fullResponse);
+          if (targetProjectId && userId) {
+            await this.memoryManager.addMessageWithCompression(targetProjectId, userId, userRequest, fullResponse);
           }
           
           socket.data.taskBreakdown = null;

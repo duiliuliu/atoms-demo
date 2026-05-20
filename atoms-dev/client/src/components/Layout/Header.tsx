@@ -39,10 +39,10 @@ export const Header: React.FC = () => {
           {showProviderMenu && (
             <>
               <div
-                className="fixed inset-0 z-10"
+                className="fixed inset-0 z-50"
                 onClick={() => setShowProviderMenu(false)}
               />
-              <div className="absolute right-0 top-full mt-2 w-48 bg-bg-tertiary border border-border rounded-lg shadow-lg z-20 overflow-hidden">
+              <div className="absolute right-0 top-full mt-2 w-48 bg-bg-tertiary border border-border rounded-lg shadow-lg z-[100] overflow-hidden">
                 <button
                   onClick={() => handleProviderChange('deepseek')}
                   className={`w-full px-4 py-3 text-left hover:bg-border transition flex items-center gap-3 ${

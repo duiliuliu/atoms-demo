@@ -128,6 +128,6 @@ async function testProjectOrdering() {
   // Access the middle one to update its lastVisitedAt
   await manager.touchProject(p2.id, TEST_USER);
   
-  const projects = manager.listProjects(TEST_USER);
+  const projects = await manager.listProjects(TEST_USER);
   assertEqual(projects[0].name, 'Middle', '最近访问的项目应在最前面');
 }
