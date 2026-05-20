@@ -352,6 +352,12 @@ export function initSocket(): Socket {
   
   socket.on('connect', () => {
     console.log('[Socket] Connected');
+    
+    // 连接成功后请求项目列表
+    const userId = getUserId();
+    if (userId) {
+      socket.emit('project:list', { userId });
+    }
   });
   
   socket.on('disconnect', () => {
@@ -521,14 +527,43 @@ export function initSocket(): Socket {
   socket.on('project:created', (data: { project: any }) => {
     useProjectStore.getState().setProjectId(data.project.id);
     useProjectStore.getState().setSandboxId(data.project.sandboxId);
+    
+    // 刷新项目列表
+    const userId = getUserId();
+    if (userId) {
+      socket.emit('project:list', { userId });
+    }
   });
 
   socket.on('project:loaded', (data: { project: any }) => {
     useProjectStore.getState().setProjectId(data.project.id);
     useProjectStore.getState().setSandboxId(data.project.sandboxId);
-    useProjectStore.getState().setFiles(data.project.files || []);
+    
+    // 设置文件列表
+    if (data.project.files && data.project.files.length > 0) {
+      useProjectStore.getState().setFiles(data.project.files);
+    }
+    
+    // 清除并重置聊天记录
     useChatStore.getState().clearMessages();
-    useChatStore.setState({ messages: data.project.messages || [] });
+    if (data.project.messages && data.project.messages.length > 0) {
+      useChatStore.setState({ messages: data.project.messages });
+    }
+    
+    // 如果有沙箱 ID，请求文件列表和预览 URL
+    if (data.project.sandboxId) {
+      socket.emit('files:list');
+      socket.emit('preview:get_url');
+      useUIStore.getState().setActiveTab('preview');
+    }
+  });
+
+  socket.on('project:deleted', (data: { projectId: string }) => {
+    // 刷新项目列表
+    const userId = getUserId();
+    if (userId) {
+      socket.emit('project:list', { userId });
+    }
   });
 
   socket.on('project:error', (data: { message: string }) => {

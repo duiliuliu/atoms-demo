@@ -4,6 +4,7 @@ import { MessageBubble } from './MessageBubble';
 import { InputBox } from './InputBox';
 import { TaskConfirmation } from './TaskConfirmation';
 import { TaskExecutionList } from './TaskExecutionList';
+import { ProjectList } from './ProjectList';
 import { Bot } from 'lucide-react';
 
 export const ChatContainer: React.FC = () => {
@@ -19,6 +20,9 @@ export const ChatContainer: React.FC = () => {
 
   return (
     <div className="flex flex-col h-full bg-bg-primary">
+      {/* Project List */}
+      <ProjectList />
+      
       {/* Messages */}
       <div
         ref={containerRef}
