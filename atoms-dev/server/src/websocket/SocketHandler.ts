@@ -63,7 +63,7 @@ export class SocketHandler {
           await this.projectManager.touchProject(projectId, userId);
           
           if ((project as StoredProject).sandboxId) {
-            const sandboxId = (project as StoredProject).sandboxId;
+            const sandboxId = (project as StoredProject).sandboxId!;
             const existingSandbox = this.sandboxManager.getSandbox(sandboxId);
             if (existingSandbox) {
               socket.data.sandboxId = sandboxId;
@@ -85,8 +85,9 @@ export class SocketHandler {
           }
           
           if ((project as StoredProject).sandboxId) {
-            const previewUrl = this.sandboxManager.getPreviewUrl((project as StoredProject).sandboxId);
-            socket.emit('preview:url', { url: previewUrl, sandboxId: (project as StoredProject).sandboxId });
+            const sandboxId = (project as StoredProject).sandboxId!;
+            const previewUrl = this.sandboxManager.getPreviewUrl(sandboxId);
+            socket.emit('preview:url', { url: previewUrl, sandboxId });
           }
         } else {
           socket.emit('project:error', { message: '项目不存在' });
