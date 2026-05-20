@@ -118,10 +118,7 @@ export class SocketHandler {
               taskBreakdown: intentResult.taskBreakdown,
               classification: intentResult.classification,
             });
-
-            // 发送确认消息
-            const confirmationMsg = this.intentHandler.generateConfirmationMessage(intentResult.taskBreakdown);
-            socket.emit('chat:chunk', { content: confirmationMsg });
+            // 不发送 chat:chunk，因为 TaskConfirmation UI 会显示
           } else {
             // 直接回答
             if (intentResult.content) {
@@ -185,10 +182,19 @@ export class SocketHandler {
               result: '成功',
             });
           }
+          
+          // 清除任务分解数据
+          socket.data.taskBreakdown = null;
         } catch (error: any) {
           console.error('[Socket] Task execution error:', error);
           socket.emit('chat:error', { message: error.message });
         }
+      });
+
+      // 取消任务
+      socket.on('task:cancel', () => {
+        socket.data.taskBreakdown = null;
+        console.log('[Socket] Task cancelled');
       });
       
       // 获取预览 URL

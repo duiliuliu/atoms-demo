@@ -1,14 +1,14 @@
 import React from 'react';
 import { useTaskStore } from '@/stores';
-import { CheckCircle, Clock, AlertTriangle } from 'lucide-react';
+import { CheckCircle, Clock, AlertTriangle, XCircle } from 'lucide-react';
 
 export const TaskConfirmation: React.FC = () => {
-  const { currentBreakdown, confirmTasks, setShowTaskPanel, setTaskBreakdown } = useTaskStore();
+  const { currentBreakdown, confirmTasks, cancelTasks } = useTaskStore();
 
   if (!currentBreakdown) return null;
 
   return (
-    <div className="p-4 bg-bg-secondary rounded-xl border border-border">
+    <div className="p-4 bg-bg-secondary rounded-xl border border-border animate-in fade-in slide-in-from-bottom-4 duration-300">
       <div className="flex items-start justify-between mb-4">
         <div>
           <h3 className="text-lg font-semibold text-white mb-1">
@@ -20,13 +20,10 @@ export const TaskConfirmation: React.FC = () => {
           </p>
         </div>
         <button
-          onClick={() => {
-            setTaskBreakdown(null);
-            setShowTaskPanel(false);
-          }}
-          className="text-text-muted hover:text-white transition"
+          onClick={cancelTasks}
+          className="p-1 hover:bg-bg-tertiary rounded-lg transition text-text-muted hover:text-red-400"
         >
-          ✕
+          <XCircle className="w-5 h-5" />
         </button>
       </div>
 
@@ -106,12 +103,20 @@ export const TaskConfirmation: React.FC = () => {
           </div>
         )}
 
-      <button
-        onClick={confirmTasks}
-        className="w-full py-3 px-4 bg-primary hover:bg-primary-hover text-white rounded-xl font-medium transition"
-      >
-        确认并开始执行
-      </button>
+      <div className="flex gap-3">
+        <button
+          onClick={cancelTasks}
+          className="flex-1 py-3 px-4 bg-bg-tertiary hover:bg-bg-tertiary/80 text-text-secondary rounded-xl font-medium transition border border-border"
+        >
+          取消
+        </button>
+        <button
+          onClick={confirmTasks}
+          className="flex-1 py-3 px-4 bg-primary hover:bg-primary-hover text-white rounded-xl font-medium transition"
+        >
+          确认执行
+        </button>
+      </div>
     </div>
   );
 };

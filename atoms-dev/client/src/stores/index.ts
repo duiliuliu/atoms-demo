@@ -78,6 +78,7 @@ interface TaskStore {
   setTaskBreakdown: (breakdown: TaskBreakdown | null) => void;
   setShowTaskPanel: (show: boolean) => void;
   confirmTasks: () => void;
+  cancelTasks: () => void;
 }
 
 interface UIStore {
@@ -146,8 +147,17 @@ export const useTaskStore = create<TaskStore>((set) => ({
     const socket = getSocket();
     if (socket) {
       socket.emit('task:confirm');
-      set({ showTaskPanel: false });
+      useChatStore.setState({ isLoading: true });
+      set({ currentBreakdown: null, showTaskPanel: false });
     }
+  },
+
+  cancelTasks: () => {
+    const socket = getSocket();
+    if (socket) {
+      socket.emit('task:cancel');
+    }
+    set({ currentBreakdown: null, showTaskPanel: false });
   },
 }));
 
@@ -392,6 +402,7 @@ export function initSocket(): Socket {
   });
 
   socket.on('task:breakdown', (data: { taskBreakdown: TaskBreakdown; classification: IntentClassification }) => {
+    useChatStore.setState({ isLoading: false });
     useTaskStore.getState().setTaskBreakdown(data.taskBreakdown);
   });
 
