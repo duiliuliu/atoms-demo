@@ -51,6 +51,7 @@ export class SocketHandler {
           await this.memoryManager.createProjectMemory(project.id, userId, name);
           socket.data.projectId = project.id;
           socket.data.userId = userId;
+          socket.data.sandboxId = undefined; // 关键！创建新项目时清空沙箱 ID
           socket.emit('project:created', { project });
         } catch (error: any) {
           socket.emit('project:error', { message: error.message });
@@ -209,8 +210,29 @@ export class SocketHandler {
           let sandboxId = socket.data.sandboxId;
 
           const keyFeatures = taskBreakdown.userIntent.keyFeatures || [];
-          const modifyMatch = keyFeatures.find(f => f.includes('修改项目'));
+          const modifyMatch = keyFeatures.find((f: string) => f.includes('修改项目'));
           let targetProjectName: string | null = null;
+          
+          // 先检查目标项目是否有自己的沙箱
+          if (targetProjectId && !modifyMatch) {
+            const targetProject = await this.projectManager.getProject(targetProjectId, userId);
+            if (targetProject && (targetProject as any).sandboxId) {
+              const projectSandboxId = (targetProject as any).sandboxId;
+              const existingSandbox = this.sandboxManager.getSandbox(projectSandboxId);
+              if (existingSandbox) {
+                sandboxId = projectSandboxId;
+                socket.data.sandboxId = sandboxId;
+              } else {
+                // 如果项目有 sandboxId 但沙箱不存在，清空它
+                sandboxId = undefined;
+                socket.data.sandboxId = undefined;
+              }
+            } else if (!modifyMatch) {
+              // 如果是新项目（没有修改项目的意图），确保使用新沙箱
+              sandboxId = undefined;
+              socket.data.sandboxId = undefined;
+            }
+          }
           
           if (modifyMatch) {
             const match = modifyMatch.match(/「(.+?)」/);
@@ -227,13 +249,30 @@ export class SocketHandler {
               targetProjectId = targetProject.id;
               socket.data.projectId = targetProjectId;
               
-              const existingSandboxes = this.sandboxManager.listSandboxes();
-              const existingSandbox = existingSandboxes.find(s => 
-                s.rootDir.includes(targetProjectId)
-              );
-              if (existingSandbox) {
-                sandboxId = existingSandbox.id;
-                socket.data.sandboxId = sandboxId;
+              // 获取目标项目的完整信息
+              const fullTargetProject = await this.projectManager.getProject(targetProjectId, userId);
+              if (fullTargetProject && (fullTargetProject as any).sandboxId) {
+                const projectSandboxId = (fullTargetProject as any).sandboxId;
+                const existingSandbox = this.sandboxManager.getSandbox(projectSandboxId);
+                if (existingSandbox) {
+                  sandboxId = projectSandboxId;
+                  socket.data.sandboxId = sandboxId;
+                } else if ((fullTargetProject as any).files) {
+                  // 如果项目有文件但沙箱不存在，重新创建沙箱
+                  const newSandboxId = await this.sandboxManager.create();
+                  sandboxId = newSandboxId;
+                  socket.data.sandboxId = sandboxId;
+                  
+                  for (const file of (fullTargetProject as any).files) {
+                    await this.sandboxManager.writeFile(sandboxId, file.path, file.content);
+                  }
+                  
+                  await this.projectManager.saveProject(targetProjectId, userId, { sandboxId });
+                }
+              } else {
+                // 目标项目没有沙箱，创建新的
+                sandboxId = undefined;
+                socket.data.sandboxId = undefined;
               }
             }
           }
