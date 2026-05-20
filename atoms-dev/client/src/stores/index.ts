@@ -142,16 +142,10 @@ export const useChatStore = create<ChatStore>((set) => ({
       isLoading: true,
     }));
 
-    const recentMessages = useChatStore.getState().messages.slice(-5);
-    const memoryContext = recentMessages.map(m => 
-      `${m.role === 'user' ? '用户' : 'AI'}: ${m.content.substring(0, 100)}${m.content.length > 100 ? '...' : ''}`
-    ).join('\n');
-
     socket.emit('chat:message', { 
       content, 
       userId,
-      projectId,
-      memory: memoryContext
+      projectId
     });
   },
 

@@ -33,6 +33,7 @@ export class AgentService extends EventEmitter {
       sandboxId?: string;
       projectId?: string;
       userId?: string;
+      memory?: string;
     }
   ): Promise<AsyncIterable<string>> {
     const self = this;
@@ -119,23 +120,20 @@ export class AgentService extends EventEmitter {
       ? Array.from(context.files.keys()).join(', ')
       : '空项目';
     
-    // 获取对话历史上下文
-    let contextStr = '';
-    if (context.projectId && context.userId) {
-      contextStr = await this.memoryManager.buildContext(context.userId, context.projectId);
+    let memoryStr = '';
+    if (context.memory) {
+      memoryStr = `\n\n## 记忆信息\n${context.memory}`;
     }
     
     return `你是 Atoms.dev 的 AI 助手，擅长根据用户需求生成代码。
 
 当前项目已有文件: ${fileList || '无'}
 
-${contextStr ? `项目上下文:
-${contextStr}
+${memoryStr}
 
-` : ''}
 用户需求: ${userInput}
 
-请根据用户需求生成完整的代码。对于简单的 HTML/CSS/JS 项目，请生成单个 HTML 文件。
+请根据用户需求和记忆信息生成完整的代码。对于简单的 HTML/CSS/JS 项目，请生成单个 HTML 文件。
 对于更复杂的项目，请生成合适的文件结构。
 
 重要规则：
@@ -144,6 +142,7 @@ ${contextStr}
 3. 使用内联样式或 <style> 标签
 4. 使用内联脚本或 <script> 标签
 5. 如果需要框架，优先使用原生 JavaScript 或简化的实现
+6. 请参考记忆信息中的历史对话，保持对话连贯性
 
 请直接输出代码，不需要解释。如果要创建文件，使用以下格式：
 \`\`\`file

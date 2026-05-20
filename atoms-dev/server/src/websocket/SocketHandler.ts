@@ -25,6 +25,7 @@ export class SocketHandler {
     this.llmService = this.agentService.getLLMService();
     this.intentHandler = new IntentHandler(this.llmService);
     this.memoryManager = new MemoryManager();
+    this.memoryManager.setLLMService(this.llmService);
 
     this.setupHandlers();
   }
@@ -122,11 +123,11 @@ export class SocketHandler {
         socket.emit('project:deleted', { projectId });
       });
 
-      socket.on('chat:message', async (data: { content: string; userId: string; projectId?: string; memory?: string }) => {
+      socket.on('chat:message', async (data: { content: string; userId: string; projectId?: string }) => {
         console.log(`[Socket] Chat message received: ${data.content.substring(0, 50)}...`);
 
         try {
-          const { content, userId, memory } = data;
+          const { content, userId } = data;
           let sandboxId = socket.data.sandboxId;
           let projectId = data.projectId || socket.data.projectId;
 
@@ -148,12 +149,13 @@ export class SocketHandler {
             timestamp: Date.now()
           };
 
-          await this.memoryManager.addUserMessage(projectId, userId, content);
           await this.projectManager.saveProject(projectId, userId, {
             messages: [userMessage]
           });
 
-          const intentResult = await this.intentHandler.handle(content, memory);
+          const compressedMemory = await this.memoryManager.getCompressedMemory(userId, projectId);
+
+          const intentResult = await this.intentHandler.handle(content, compressedMemory);
 
           if (intentResult.type === 'task_breakdown' && intentResult.taskBreakdown) {
             socket.data.taskBreakdown = intentResult.taskBreakdown;
@@ -164,7 +166,8 @@ export class SocketHandler {
           } else {
             if (intentResult.content) {
               socket.emit('chat:chunk', { content: intentResult.content });
-              await this.memoryManager.addAssistantMessage(projectId, intentResult.content);
+              
+              await this.memoryManager.addMessageWithCompression(projectId, userId, content, intentResult.content);
               
               const assistantMessageId = crypto.randomUUID();
               const assistantMessage = {
@@ -206,29 +209,31 @@ export class SocketHandler {
             }
           }
 
+          const userRequest = taskBreakdown.userIntent.originalRequest;
+          
+          const compressedMemory = await this.memoryManager.getCompressedMemory(userId, projectId);
+
           const stream = await this.agentService.processRequest(
-            taskBreakdown.userIntent.originalRequest,
+            userRequest,
             { 
               sandboxId, 
               files,
               projectId,
-              userId
+              userId,
+              memory: compressedMemory
             }
           );
 
+          let fullResponse = '';
           for await (const chunk of stream) {
             socket.emit('chat:chunk', { content: chunk });
+            fullResponse += chunk;
           }
 
           socket.emit('chat:end', {});
 
-          if (projectId) {
-            await this.memoryManager.addConversation(projectId, {
-              userRequest: taskBreakdown.userIntent.originalRequest,
-              aiUnderstanding: taskBreakdown.userIntent.understoodGoal,
-              tasks: taskBreakdown.tasks.map((t: any) => t.description),
-              result: '成功',
-            });
+          if (projectId && userId) {
+            await this.memoryManager.addMessageWithCompression(projectId, userId, userRequest, fullResponse);
           }
           
           socket.data.taskBreakdown = null;
