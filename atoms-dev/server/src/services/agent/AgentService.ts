@@ -2,6 +2,7 @@ import { EventEmitter } from 'events';
 import { LLMService } from '../llm/LLMService.js';
 import { SandboxManager } from '../sandbox/SandboxManager.js';
 import { MemoryManager } from '../MemoryManager.js';
+import type { BuildTask } from '../../types/task-queue.js';
 
 interface AgentConfig {
   model?: string;
@@ -34,6 +35,7 @@ export class AgentService extends EventEmitter {
       projectId?: string;
       userId?: string;
       memory?: string;
+      batchTasks?: BuildTask[];
     }
   ): Promise<AsyncIterable<string>> {
     const self = this;

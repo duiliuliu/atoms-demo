@@ -6,6 +6,8 @@ import { ProjectManager } from '../services/ProjectManager.js';
 import { IntentHandler } from '../services/IntentHandler.js';
 import { MemoryManager } from '../services/MemoryManager.js';
 import { LLMService } from '../services/llm/LLMService.js';
+import { TaskQueueManager } from '../services/TaskQueueManager.js';
+import type { BuildTask } from '../types/task-queue.js';
 import type { StoredProject } from '../types/project.js';
 
 export class SocketHandler {
@@ -16,6 +18,7 @@ export class SocketHandler {
   private intentHandler: IntentHandler;
   private memoryManager: MemoryManager;
   private llmService: LLMService;
+  private taskQueueManager: TaskQueueManager;
 
   constructor(io: Server) {
     this.io = io;
@@ -26,7 +29,7 @@ export class SocketHandler {
     this.intentHandler = new IntentHandler(this.llmService);
     this.memoryManager = new MemoryManager();
     this.memoryManager.setLLMService(this.llmService);
-
+    this.taskQueueManager = new TaskQueueManager();
     this.setupHandlers();
   }
 
@@ -223,7 +226,6 @@ export class SocketHandler {
           const modifyMatch = keyFeatures.find((f: string) => f.includes('修改项目'));
           let targetProjectName: string | null = null;
           
-          // 先检查目标项目是否有自己的沙箱
           if (targetProjectId && !modifyMatch) {
             const targetProject = await this.projectManager.getProject(targetProjectId, userId);
             if (targetProject && (targetProject as any).sandboxId) {
@@ -233,12 +235,10 @@ export class SocketHandler {
                 sandboxId = projectSandboxId;
                 socket.data.sandboxId = sandboxId;
               } else {
-                // 如果项目有 sandboxId 但沙箱不存在，清空它
                 sandboxId = undefined;
                 socket.data.sandboxId = undefined;
               }
             } else if (!modifyMatch) {
-              // 如果是新项目（没有修改项目的意图），确保使用新沙箱
               sandboxId = undefined;
               socket.data.sandboxId = undefined;
             }
@@ -259,7 +259,6 @@ export class SocketHandler {
               targetProjectId = targetProject.id;
               socket.data.projectId = targetProjectId;
               
-              // 获取目标项目的完整信息
               const fullTargetProject = await this.projectManager.getProject(targetProjectId, userId);
               if (fullTargetProject && (fullTargetProject as any).sandboxId) {
                 const projectSandboxId = (fullTargetProject as any).sandboxId;
@@ -268,7 +267,6 @@ export class SocketHandler {
                   sandboxId = projectSandboxId;
                   socket.data.sandboxId = sandboxId;
                 } else if ((fullTargetProject as any).files) {
-                  // 如果项目有文件但沙箱不存在，重新创建沙箱
                   const newSandboxId = await this.sandboxManager.create();
                   sandboxId = newSandboxId;
                   socket.data.sandboxId = sandboxId;
@@ -280,7 +278,6 @@ export class SocketHandler {
                   await this.projectManager.saveProject(targetProjectId, userId, { sandboxId });
                 }
               } else {
-                // 目标项目没有沙箱，创建新的
                 sandboxId = undefined;
                 socket.data.sandboxId = undefined;
               }
@@ -297,30 +294,35 @@ export class SocketHandler {
 
           const userRequest = taskBreakdown.userIntent.originalRequest;
           
+          const buildTasks: BuildTask[] = taskBreakdown.tasks.map((t: any) => ({
+            id: t.id,
+            type: t.type,
+            target: t.files && t.files[0] ? t.files[0] : 'unknown',
+            content: t.content,
+            estimatedTokens: t.estimatedTokens,
+            status: 'pending' as const,
+            dependencies: t.dependencies || [],
+          }));
+
+          const queue = this.taskQueueManager.createQueue(targetProjectId!, userId, buildTasks, 2);
+          this.taskQueueManager.startQueue(targetProjectId!);
+          
           const compressedMemory = await this.memoryManager.getCompressedMemory(userId, targetProjectId);
 
-          const stream = await this.agentService.processRequest(
-            userRequest,
-            { 
-              sandboxId, 
-              files,
-              projectId: targetProjectId,
-              userId,
-              memory: compressedMemory
-            }
-          );
+          const currentBatch = this.taskQueueManager.getCurrentBatch(targetProjectId!);
+          
+          socket.emit('task:batch_start', {
+            batchId: `${targetProjectId}-batch-0`,
+            tasks: currentBatch.map(t => ({
+              id: t.id,
+              description: t.type === 'create_file' ? `创建 ${t.target}` : t.type === 'update_file' ? `更新 ${t.target}` : t.target,
+              status: 'pending',
+            })),
+            currentBatch: 0,
+            totalBatches: queue.totalBatches,
+          });
 
-          let fullResponse = '';
-          for await (const chunk of stream) {
-            socket.emit('chat:chunk', { content: chunk });
-            fullResponse += chunk;
-          }
-
-          socket.emit('chat:end', {});
-
-          if (targetProjectId && userId) {
-            await this.memoryManager.addMessageWithCompression(targetProjectId, userId, userRequest, fullResponse);
-          }
+          await this.executeTasksBatch(targetProjectId!, userId, currentBatch, sandboxId, socket, compressedMemory);
           
           socket.data.taskBreakdown = null;
         } catch (error: any) {
@@ -463,5 +465,113 @@ export class SocketHandler {
       md: 'markdown',
     };
     return langMap[ext || ''] || 'plaintext';
+  }
+
+  private async executeTasksBatch(
+    projectId: string, 
+    userId: string, 
+    tasks: BuildTask[], 
+    sandboxId: string | undefined,
+    socket: any,
+    initialMemory?: string
+  ) {
+    const userRequest = socket.data.taskBreakdown?.userIntent?.originalRequest || '';
+    
+    let fullResponse = '';
+    let files: Map<string, string> | undefined;
+    
+    if (sandboxId) {
+      const sandbox = this.sandboxManager.getSandbox(sandboxId);
+      if (sandbox) {
+        files = sandbox.files;
+      }
+    }
+
+    for (const task of tasks) {
+      this.taskQueueManager.updateTaskStatus(projectId, task.id, 'in_progress');
+      socket.emit('task:progress', {
+        taskId: task.id,
+        status: 'in_progress',
+      });
+    }
+
+    const compressedMemory = initialMemory || await this.memoryManager.getCompressedMemory(userId, projectId);
+
+    const stream = await this.agentService.processRequest(
+      userRequest,
+      { 
+        sandboxId, 
+        files,
+        projectId,
+        userId,
+        memory: compressedMemory,
+        batchTasks: tasks,
+      }
+    );
+
+    for await (const chunk of stream) {
+      socket.emit('chat:chunk', { content: chunk });
+      fullResponse += chunk;
+    }
+
+    for (const task of tasks) {
+      this.taskQueueManager.updateTaskStatus(projectId, task.id, 'completed', '完成');
+      socket.emit('task:progress', {
+        taskId: task.id,
+        status: 'completed',
+        output: '任务执行完成',
+      });
+    }
+
+    await this.memoryManager.addMessageWithCompression(projectId, userId, userRequest, fullResponse);
+
+    const nextQueue = this.taskQueueManager.moveToNextBatch(projectId);
+    
+    if (nextQueue && nextQueue.status !== 'completed') {
+      const nextBatch = this.taskQueueManager.getCurrentBatch(projectId);
+      
+      socket.emit('task:batch_complete', {
+        batchId: `${projectId}-batch-${nextQueue.currentBatch - 1}`,
+        tasks: tasks.map(t => ({
+          id: t.id,
+          description: t.type === 'create_file' ? `创建 ${t.target}` : t.type === 'update_file' ? `更新 ${t.target}` : t.target,
+          status: 'completed',
+          output: '完成',
+        })),
+        currentBatch: nextQueue.currentBatch,
+        totalBatches: nextQueue.totalBatches,
+        isComplete: false,
+      });
+      
+      setTimeout(() => {
+        socket.emit('task:batch_start', {
+          batchId: `${projectId}-batch-${nextQueue.currentBatch}`,
+          tasks: nextBatch.map(t => ({
+            id: t.id,
+            description: t.type === 'create_file' ? `创建 ${t.target}` : t.type === 'update_file' ? `更新 ${t.target}` : t.target,
+            status: 'pending',
+          })),
+          currentBatch: nextQueue.currentBatch,
+          totalBatches: nextQueue.totalBatches,
+        });
+        
+        this.executeTasksBatch(projectId, userId, nextBatch, sandboxId, socket);
+      }, 500);
+    } else {
+      socket.emit('task:batch_complete', {
+        batchId: `${projectId}-batch-final`,
+        tasks: tasks.map(t => ({
+          id: t.id,
+          description: t.type === 'create_file' ? `创建 ${t.target}` : t.type === 'update_file' ? `更新 ${t.target}` : t.target,
+          status: 'completed',
+          output: '完成',
+        })),
+        currentBatch: nextQueue?.currentBatch || 0,
+        totalBatches: nextQueue?.totalBatches || 1,
+        isComplete: true,
+      });
+      
+      socket.emit('chat:end', {});
+    }
   }
 }

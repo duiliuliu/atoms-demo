@@ -1,13 +1,15 @@
 import { create } from 'zustand';
 import { io, Socket } from 'socket.io-client';
-import { Message, FileInfo, TerminalLine, AgentStatus, LLMProvider, TabType } from '@/types';
+import { FileInfo, TerminalLine, AgentStatus, LLMProvider, TabType, EnhancedMessage, TaskExecutionContent } from '@/types';
 import { getUserId, setLastProjectId } from '@/utils/userId';
 
 interface ChatStore {
-  messages: Message[];
+  messages: EnhancedMessage[];
   isLoading: boolean;
   sendMessage: (content: string) => void;
   clearMessages: () => void;
+  addTaskExecutionMessage: (content: TaskExecutionContent) => void;
+  updateTaskExecution: (batchId: string, tasks: any[], isComplete?: boolean) => void;
 }
 
 interface Task {
@@ -132,8 +134,9 @@ export const useChatStore = create<ChatStore>((set) => ({
 
     const userId = getUserId();
     const projectId = useProjectStore.getState().projectId;
-    const userMessage: Message = {
+    const userMessage: EnhancedMessage = {
       id: crypto.randomUUID(),
+      type: 'text',
       role: 'user',
       content,
       timestamp: Date.now(),
@@ -152,6 +155,45 @@ export const useChatStore = create<ChatStore>((set) => ({
   },
 
   clearMessages: () => set({ messages: [] }),
+
+  addTaskExecutionMessage: (taskContent: TaskExecutionContent) => {
+    const message: EnhancedMessage = {
+      id: crypto.randomUUID(),
+      type: 'task_execution',
+      role: 'ai',
+      content: '',
+      timestamp: Date.now(),
+      taskExecution: taskContent,
+    };
+    set((state) => ({
+      messages: [...state.messages, message],
+    }));
+  },
+
+  updateTaskExecution: (batchId: string, tasks: any[], isComplete?: boolean) => {
+    set(state => {
+      const messageIndex = state.messages.findIndex(
+        msg => msg.type === 'task_execution' && msg.taskExecution?.batchId === batchId
+      );
+      if (messageIndex >= 0) {
+        return {
+          messages: state.messages.map((msg, i) =>
+            i === messageIndex
+              ? {
+                  ...msg,
+                  taskExecution: {
+                    ...msg.taskExecution!,
+                    tasks,
+                    isComplete: isComplete ?? msg.taskExecution!.isComplete,
+                  },
+                }
+              : msg
+          ),
+        };
+      }
+      return state;
+    });
+  },
 }));
 
 // Task Store
@@ -168,25 +210,26 @@ export const useTaskStore = create<TaskStore>((set, get) => ({
   confirmTasks: () => {
     const socket = getSocket();
     const current = get().currentBreakdown;
-    if (socket) {
+    if (socket && current) {
       socket.emit('task:confirm');
       useChatStore.setState({ isLoading: true });
       
-      if (current) {
-        const tasks = current.tasks.map(task => ({
-          id: task.id,
-          description: task.description,
-          status: 'pending' as const,
-          createdAt: Date.now(),
-        }));
-        set({ 
-          currentBreakdown: null, 
-          showTaskPanel: false,
-          executingTasks: tasks 
-        });
-      } else {
-        set({ currentBreakdown: null, showTaskPanel: false });
-      }
+      const taskBreakdownMessage: EnhancedMessage = {
+        id: crypto.randomUUID(),
+        type: 'task_breakdown',
+        role: 'ai',
+        content: `我将为您完成以下 ${current.tasks.length} 个任务：\n${current.tasks.map(t => `• ${t.description}`).join('\n')}`,
+        timestamp: Date.now(),
+        taskBreakdown: current,
+      };
+      useChatStore.setState(state => ({
+        messages: [...state.messages, taskBreakdownMessage],
+      }));
+      
+      set({ 
+        currentBreakdown: null, 
+        showTaskPanel: false,
+      });
     }
   },
 
@@ -383,7 +426,7 @@ export function initSocket(): Socket {
     const messages = chatStore.messages;
     const lastMessage = messages[messages.length - 1];
     
-    if (lastMessage && lastMessage.role === 'ai') {
+    if (lastMessage && lastMessage.role === 'ai' && lastMessage.type === 'text') {
       useChatStore.setState({
         messages: messages.map((m) =>
           m.id === lastMessage.id
@@ -392,8 +435,9 @@ export function initSocket(): Socket {
         ),
       });
     } else {
-      const aiMessage: Message = {
+      const aiMessage: EnhancedMessage = {
         id: crypto.randomUUID(),
+        type: 'text',
         role: 'ai',
         content: data.content,
         timestamp: Date.now(),
@@ -422,12 +466,13 @@ export function initSocket(): Socket {
     });
   });
   
-  socket.on('chat:restore', (data: { messages: Array<{ id: string; role: string; content: string; timestamp: number }> }) => {
+  socket.on('chat:restore', (data: { messages: Array<{ id: string; role: string; content: string; timestamp: number; type?: string }> }) => {
     useChatStore.setState({ messages: data.messages.map(m => ({
       id: m.id,
       role: m.role === 'user' ? 'user' : 'ai',
       content: m.content,
-      timestamp: m.timestamp
+      timestamp: m.timestamp,
+      type: (m.type as EnhancedMessage['type']) || 'text'
     })) });
   });
   
@@ -514,7 +559,70 @@ export function initSocket(): Socket {
       });
     }
   });
-  
+
+  socket.on('task:batch_start', (data: any) => {
+    console.log('[Socket] Task batch started:', data);
+    
+    useChatStore.getState().addTaskExecutionMessage({
+      tasks: data.tasks,
+      batchId: data.batchId,
+      currentBatch: data.currentBatch,
+      totalBatches: data.totalBatches,
+      isComplete: false,
+    });
+  });
+
+  socket.on('task:progress', (data: any) => {
+    console.log('[Socket] Task progress:', data);
+    
+    const messages = useChatStore.getState().messages;
+    const lastIndex = messages.length - 1;
+    
+    if (lastIndex >= 0 && messages[lastIndex].type === 'task_execution') {
+      const updatedTasks = messages[lastIndex].taskExecution?.tasks.map(t =>
+        t.id === data.taskId ? { ...t, status: data.status, output: data.output || t.output } : t
+      ) || [];
+      
+      useChatStore.setState(state => ({
+        messages: state.messages.map((msg, i) =>
+          i === lastIndex
+            ? {
+                ...msg,
+                taskExecution: {
+                  ...msg.taskExecution!,
+                  tasks: updatedTasks,
+                },
+              }
+            : msg
+        ),
+      }));
+    }
+  });
+
+  socket.on('task:batch_complete', (data: any) => {
+    console.log('[Socket] Task batch complete:', data);
+    
+    const messages = useChatStore.getState().messages;
+    const lastIndex = messages.length - 1;
+    
+    if (lastIndex >= 0 && messages[lastIndex].type === 'task_execution') {
+      useChatStore.setState(state => ({
+        messages: state.messages.map((msg, i) =>
+          i === lastIndex
+            ? {
+                ...msg,
+                taskExecution: {
+                  ...msg.taskExecution!,
+                  tasks: data.tasks,
+                  isComplete: data.isComplete,
+                },
+              }
+            : msg
+        ),
+      }));
+    }
+  });
+
   socket.on('llm:provider', (data: { provider: string }) => {
     useUIStore.getState().setCurrentProvider(data.provider as LLMProvider);
   });
@@ -575,11 +683,12 @@ export function initSocket(): Socket {
     // 清除并重置聊天记录
     useChatStore.getState().clearMessages();
     if (data.project.messages && data.project.messages.length > 0) {
-      useChatStore.setState({ messages: data.project.messages.map((m: { id: string; role: string; content: string; timestamp: number }) => ({
+      useChatStore.setState({ messages: data.project.messages.map((m: { id: string; role: string; content: string; timestamp: number; type?: string }) => ({
         id: m.id,
         role: m.role === 'user' ? 'user' : 'ai',
         content: m.content,
-        timestamp: m.timestamp
+        timestamp: m.timestamp,
+        type: (m.type as EnhancedMessage['type']) || 'text'
       })) });
     }
     

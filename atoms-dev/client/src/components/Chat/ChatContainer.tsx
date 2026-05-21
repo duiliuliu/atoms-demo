@@ -3,19 +3,18 @@ import { useChatStore, useTaskStore } from '@/stores';
 import { MessageBubble } from './MessageBubble';
 import { InputBox } from './InputBox';
 import { TaskConfirmation } from './TaskConfirmation';
-import { TaskExecutionList } from './TaskExecutionList';
 import { Bot } from 'lucide-react';
 
 export const ChatContainer: React.FC = () => {
   const { messages, isLoading } = useChatStore();
-  const { currentBreakdown, executingTasks } = useTaskStore();
+  const { currentBreakdown } = useTaskStore();
   const containerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (containerRef.current) {
       containerRef.current.scrollTop = containerRef.current.scrollHeight;
     }
-  }, [messages, executingTasks]);
+  }, [messages]);
 
   return (
     <div className="flex flex-col h-full bg-bg-primary">
@@ -24,7 +23,7 @@ export const ChatContainer: React.FC = () => {
         ref={containerRef}
         className="flex-1 overflow-y-auto p-4 space-y-4"
       >
-        {messages.length === 0 && !currentBreakdown && executingTasks.length === 0 && (
+        {messages.length === 0 && !currentBreakdown && (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <div className="w-20 h-20 rounded-full bg-bg-secondary flex items-center justify-center mb-4">
               <Bot className="w-10 h-10 text-primary" />
@@ -33,7 +32,7 @@ export const ChatContainer: React.FC = () => {
               欢迎使用 Atoms.dev
             </h2>
             <p className="text-text-secondary max-w-md">
-              描述你想要创建的应用，AI 将自动为你生成代码并实时预览
+              描述您想要创建的应用，AI 将自动为您生成代码并实时预览
             </p>
             <div className="mt-6 text-sm text-text-muted space-y-2">
               <p>💡 试试这些例子：</p>
@@ -46,15 +45,13 @@ export const ChatContainer: React.FC = () => {
           </div>
         )}
 
-        {currentBreakdown && <TaskConfirmation />}
-
-        {executingTasks.length > 0 && (
-          <TaskExecutionList tasks={executingTasks} />
-        )}
-
+        {/* 按顺序渲染所有消息（包括任务卡片） */}
         {messages.map((msg) => (
           <MessageBubble key={msg.id} message={msg} />
         ))}
+
+        {/* 任务确认卡片（仅在没有其他消息时显示） */}
+        {currentBreakdown && messages.length === 0 && <TaskConfirmation />}
 
         {isLoading && messages.length > 0 && !currentBreakdown && (
           <div className="flex items-center gap-2 text-text-secondary animate-fadeIn">

@@ -1,9 +1,9 @@
 {
-  "projectId": "ad5c58e3-838e-464e-8a2e-02fdb545a4b2",
-  "userId": "test-user-e2e-bffd8243",
+  "projectId": "8e5c0386-af01-431d-9c21-8dd717b5a8ad",
+  "userId": "test-user-e2e-74b8c302",
   "name": "天气应用测试",
-  "createdAt": 1779323212802,
-  "updatedAt": 1779323212803,
+  "createdAt": 1779326629112,
+  "updatedAt": 1779326629112,
   "goal": "创建一个天气查询应用",
   "techStack": [],
   "completedFeatures": [],
@@ -13,19 +13,19 @@
     {
       "role": "user",
       "content": "创建天气应用",
-      "timestamp": 1779323212803
+      "timestamp": 1779326629112
     },
     {
       "role": "assistant",
       "content": "好的，我来创建天气应用...",
-      "timestamp": 1779323212804
+      "timestamp": 1779326629113
     }
   ],
   "context": "",
   "recentMemories": [
     {
       "content": "好的！我来帮你创建一个天气应用。\n\n我将创建一个天气预报应用，包含以下功能：\n- 显示当前天气\n- 温度显示\n- 美观的界面\n\n让我开始创建文件...",
-      "timestamp": 1779323212803,
+      "timestamp": 1779326629112,
       "round": 0
     }
   ],

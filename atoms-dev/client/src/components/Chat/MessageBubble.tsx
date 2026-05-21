@@ -1,112 +1,118 @@
-import { Bot, User } from 'lucide-react';
-import { Message } from '@/types';
+import React, { useState } from 'react';
+import { User, Bot, CheckCircle, Clock, AlertCircle, ChevronDown, ChevronRight, Code } from 'lucide-react';
+import { EnhancedMessage } from '@/types';
 
-interface Props {
-  message: Message;
+interface MessageBubbleProps {
+  message: EnhancedMessage;
 }
 
-export const MessageBubble: React.FC<Props> = ({ message }) => {
+export const MessageBubble: React.FC<MessageBubbleProps> = ({ message }) => {
   const isUser = message.role === 'user';
+  const [expanded, setExpanded] = useState(true);
 
-  const formatContent = (content: string) => {
-    const codeBlockRegex = /```(\w+)?\n?([\s\S]*?)```/g;
-    const inlineCodeRegex = /`([^`]+)`/g;
-    const segments: { type: 'text' | 'code'; content: string; lang?: string }[] = [];
-    let codeIndex = 0;
-    let codeMatch;
-
-    while ((codeMatch = codeBlockRegex.exec(content)) !== null) {
-      if (codeMatch.index > codeIndex) {
-        segments.push({
-          type: 'text',
-          content: content.slice(codeIndex, codeMatch.index),
-        });
-      }
-      segments.push({
-        type: 'code',
-        content: codeMatch[2] || codeMatch[0],
-        lang: codeMatch[1],
-      });
-      codeIndex = codeMatch.index + codeMatch[0].length;
-    }
-
-    if (codeIndex < content.length) {
-      segments.push({
-        type: 'text',
-        content: content.slice(codeIndex),
-      });
-    }
-
-    if (segments.length === 0) {
-      segments.push({ type: 'text', content });
-    }
-
-    return segments.map((seg, i) => {
-      if (seg.type === 'code') {
-        return (
-          <pre key={i} className="bg-black/30 rounded-lg p-3 my-2 overflow-x-auto">
-            <code className="text-sm font-mono text-green-400">{seg.content}</code>
-          </pre>
-        );
-      }
-      
-      const textParts: React.ReactNode[] = [];
-      let text = seg.content;
-      let inlineMatch;
-      let inlineIndex = 0;
-      
-      while ((inlineMatch = inlineCodeRegex.exec(text)) !== null) {
-        if (inlineMatch.index > inlineIndex) {
-          textParts.push(text.slice(inlineIndex, inlineMatch.index));
-        }
-        textParts.push(
-          <code key={inlineIndex} className="bg-black/30 px-1.5 py-0.5 rounded text-sm font-mono text-green-400">
-            {inlineMatch[1]}
-          </code>
-        );
-        inlineIndex = inlineMatch.index + inlineMatch[0].length;
-      }
-      
-      if (inlineIndex < text.length) {
-        textParts.push(text.slice(inlineIndex));
-      }
-
-      return <span key={i}>{textParts.length > 0 ? textParts : text}</span>;
-    });
+  // 渲染任务执行卡片
+  const renderTaskExecution = () => {
+    if (!message.taskExecution) return null;
+    const { tasks, currentBatch, totalBatches, isComplete } = message.taskExecution;
+    
+    return (
+      <div className="bg-bg-secondary rounded-xl p-4 border border-border">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Code className="w-5 h-5 text-accent" />
+            <h3 className="text-lg font-semibold text-white">
+              任务执行 {isComplete ? '(完成)' : `(${currentBatch + 1}/${totalBatches})`}
+            </h3>
+          </div>
+          <button 
+            onClick={() => setExpanded(!expanded)}
+            className="text-text-muted hover:text-white transition-colors"
+          >
+            {expanded ? <ChevronDown className="w-4 h-4" /> : <ChevronRight className="w-4 h-4" />}
+          </button>
+        </div>
+        
+        {expanded && (
+          <div className="space-y-3">
+            {tasks.map(task => (
+              <div key={task.id} className="border border-border rounded-lg p-3 bg-bg-tertiary hover:bg-bg-quaternary transition-colors">
+                <div className="flex items-center gap-3">
+                  {task.status === 'completed' && <CheckCircle className="w-5 h-5 text-green-500 flex-shrink-0" />}
+                  {task.status === 'in_progress' && <Clock className="w-5 h-5 text-yellow-500 animate-pulse flex-shrink-0" />}
+                  {task.status === 'pending' && <Clock className="w-5 h-5 text-gray-400 flex-shrink-0" />}
+                  {task.status === 'failed' && <AlertCircle className="w-5 h-5 text-red-500 flex-shrink-0" />}
+                  <span className={`font-medium text-sm ${
+                    task.status === 'completed' ? 'text-green-400' :
+                    task.status === 'in_progress' ? 'text-yellow-400' :
+                    task.status === 'failed' ? 'text-red-400' :
+                    'text-gray-300'
+                  }`}>
+                    {task.description}
+                  </span>
+                </div>
+                {task.output && (
+                  <div className="mt-2 pl-8 text-xs text-text-muted font-mono whitespace-pre-wrap bg-black/20 rounded p-2">
+                    {task.output}
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        )}
+      </div>
+    );
   };
 
-  const formatTime = (timestamp: number) => {
-    return new Date(timestamp).toLocaleTimeString('zh-CN', {
-      hour: '2-digit',
-      minute: '2-digit',
-    });
+  // 渲染任务分解卡片
+  const renderTaskBreakdown = () => {
+    if (!message.taskBreakdown) return null;
+    
+    return (
+      <div className="bg-bg-secondary rounded-xl p-4 border border-border">
+        <div className="flex items-center gap-2 mb-3">
+          <Code className="w-5 h-5 text-accent" />
+          <h3 className="text-lg font-semibold text-white">任务规划</h3>
+        </div>
+        <div className="text-text-secondary whitespace-pre-wrap leading-relaxed">
+          {message.content}
+        </div>
+      </div>
+    );
   };
 
   return (
-    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'} animate-fadeIn`}>
-      <div
-        className={`
-          max-w-[85%] rounded-2xl px-4 py-3
-          ${isUser
-            ? 'bg-primary text-white rounded-br-md'
-            : 'bg-bg-secondary text-white rounded-bl-md'
-          }
-        `}
-      >
-        {!isUser && (
-          <div className="flex items-center gap-2 mb-2 pb-2 border-b border-border">
-            <Bot className="w-4 h-4 text-primary" />
-            <span className="text-xs text-text-secondary">AI 助手</span>
+    <div className={`flex ${isUser ? 'justify-end' : 'justify-start'}`}>
+      <div className={`max-w-3xl w-full ${isUser ? 'pl-12' : 'pr-12'}`}>
+        <div className="flex items-start gap-3">
+          {!isUser && (
+            <div className="w-8 h-8 rounded-full bg-accent/20 flex items-center justify-center flex-shrink-0">
+              <Bot className="w-5 h-5 text-accent" />
+            </div>
+          )}
+          
+          <div className="flex-1">
+            {message.type === 'task_execution' ? (
+              renderTaskExecution()
+            ) : message.type === 'task_breakdown' ? (
+              renderTaskBreakdown()
+            ) : (
+              <div className={`
+                rounded-2xl px-4 py-3
+                ${isUser 
+                  ? 'bg-primary text-white' 
+                  : 'bg-bg-secondary text-white border border-border'
+                }
+              `}>
+                <p className="whitespace-pre-wrap leading-relaxed">{message.content}</p>
+              </div>
+            )}
           </div>
-        )}
-
-        <div className="message-content text-sm leading-relaxed">
-          {formatContent(message.content)}
-        </div>
-
-        <div className={`mt-2 text-xs ${isUser ? 'text-white/60' : 'text-text-muted'}`}>
-          {isUser && <User className="w-3 h-3 inline mr-1" />}
-          {formatTime(message.timestamp)}
+          
+          {isUser && (
+            <div className="w-8 h-8 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0">
+              <User className="w-5 h-5 text-primary" />
+            </div>
+          )}
         </div>
       </div>
     </div>
