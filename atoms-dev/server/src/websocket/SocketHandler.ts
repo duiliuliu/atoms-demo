@@ -65,6 +65,16 @@ export class SocketHandler {
           socket.data.userId = userId;
           await this.projectManager.touchProject(projectId, userId);
           
+          // 预加载项目记忆到缓存
+          const hasMemory = await this.memoryManager.hasProjectMemory(projectId);
+          if (hasMemory) {
+            const memoryPath = await this.memoryManager.getMemoryFilePath(projectId);
+            if (memoryPath) {
+              await this.memoryManager.loadMemoryFromFile(memoryPath);
+              console.log(`[Socket] Preloaded memory for project: ${projectId}`);
+            }
+          }
+          
           let sandboxId = (project as StoredProject).sandboxId;
           
           if (sandboxId) {

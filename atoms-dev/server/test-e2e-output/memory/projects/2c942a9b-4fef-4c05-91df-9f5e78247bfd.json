@@ -1,0 +1,71 @@
+{
+  "projectId": "2c942a9b-4fef-4c05-91df-9f5e78247bfd",
+  "userId": "test-user-e2e-bffd8243",
+  "name": "测试TODO应用",
+  "createdAt": 1779323212787,
+  "updatedAt": 1779323212804,
+  "goal": "创建一个功能完整的待办事项应用",
+  "techStack": [
+    "HTML",
+    "CSS",
+    "JavaScript"
+  ],
+  "completedFeatures": [
+    "基础UI界面",
+    "添加待办功能"
+  ],
+  "inProgressFeatures": [],
+  "plannedFeatures": [],
+  "conversationHistory": [
+    {
+      "role": "user",
+      "content": "建立TODO应用",
+      "timestamp": 1779323212788
+    },
+    {
+      "role": "assistant",
+      "content": "好的！我来帮你创建一个 TODO 应用。\n\n我将创建一个完整的待办事项应用，包含以下功能：\n- 添加待办事项\n- 标记完成\n- 删除待办事项\n- 美观的界面\n\n让我开始创建文件...",
+      "timestamp": 1779323212789
+    },
+    {
+      "role": "user",
+      "content": "重新做，需要有header头表明名称",
+      "timestamp": 1779323212802
+    },
+    {
+      "role": "assistant",
+      "content": "好的！我来重新制作 TODO 应用，添加 header 显示应用名称。\n\n我会保持原有的功能，同时添加一个漂亮的 header 部分，显示应用名称 \"My TODO App\"。\n\n让我重新创建文件...",
+      "timestamp": 1779323212803
+    },
+    {
+      "role": "user",
+      "content": "添加删除待办功能",
+      "timestamp": 1779323212804
+    },
+    {
+      "role": "assistant",
+      "content": "好的！我来帮你创建一个 TODO 应用。\n\n我将创建一个完整的待办事项应用，包含以下功能：\n- 添加待办事项\n- 标记完成\n- 删除待办事项\n- 美观的界面\n\n让我开始创建文件...",
+      "timestamp": 1779323212805
+    }
+  ],
+  "context": "",
+  "recentMemories": [
+    {
+      "content": "好的！我来帮你创建一个 TODO 应用。\n\n我将创建一个完整的待办事项应用，包含以下功能：\n- 添加待办事项\n- 标记完成\n- 删除待办事项\n- 美观的界面\n\n让我开始创建文件...",
+      "timestamp": 1779323212788,
+      "round": 0
+    },
+    {
+      "content": "好的！我来重新制作 TODO 应用，添加 header 显示应用名称。\n\n我会保持原有的功能，同时添加一个漂亮的 header 部分，显示应用名称 \"My TODO App\"。\n\n让我重新创建文件...",
+      "timestamp": 1779323212802,
+      "round": 1
+    },
+    {
+      "content": "这是一个 Mock 响应。",
+      "timestamp": 1779323212804,
+      "round": 2
+    }
+  ],
+  "compressedMemories": [],
+  "conversationCount": 3
+}

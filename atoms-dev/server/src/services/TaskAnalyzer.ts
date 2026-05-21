@@ -25,19 +25,24 @@ export class TaskAnalyzer {
   private async analyzeWithAI(userInput: string, context?: string): Promise<TaskBreakdown | null> {
     if (!this.llmService) return null;
 
+    // 检测是否是继续请求
+    const isContinueRequest = /(继续|完成|补充|接着|继续输出|继续做)/i.test(userInput);
+
     const prompt = `分析用户的代码请求，理解用户意图。
 
 用户请求：${userInput}
 
 ${context || ''}
 
+${isContinueRequest ? '注意：这是一个"继续"请求，请根据记忆中的上下文继续之前的工作，不要创建新的空白文件。' : ''}
+
 请分析并返回JSON格式的任务拆分：
 {
-  "isModify": true/false,  // 是否是修改现有项目
-  "targetProject": "项目名称或null",  // 如果是修改，指明是哪个项目
-  "action": "create/update",  // 创建还是更新
+  "isModify": true/false,  // 是否是修改/继续现有项目
+  "targetProject": "项目名称或null",  // 如果是修改/继续，指明是哪个项目
+  "action": "create/update/continue",  // 创建/更新/继续
   "taskType": "create_file/update_file",  // 任务类型
-  "description": "任务描述"
+  "description": "任务描述",
   "files": ["文件路径"]
 }
 
@@ -125,12 +130,21 @@ Please reply "confirm" to proceed, or let me know if you need to make any change
   }
 
   private createDefaultBreakdown(userInput: string, context?: string): TaskBreakdown {
-    const isModifyRequest = /项目[一二三四五六七八九十\d]+|现有的|之前的|添加|更新|修改|完善|优化/.test(userInput);
+    const isContinueRequest = /(继续|完成|补充|接着|继续输出|继续做)/i.test(userInput);
+    const isModifyRequest = isContinueRequest || /项目[一二三四五六七八九十\d]+|现有的|之前的|添加|更新|修改|完善|优化/.test(userInput);
     
     const taskType = isModifyRequest ? 'update_file' : 'create_file';
-    const taskDescription = isModifyRequest 
+    let taskDescription = isModifyRequest 
       ? 'Update existing project files to add/modify features'
       : 'Create index.html with basic structure';
+    
+    let keyFeatures = [isModifyRequest ? 'Modify existing project' : 'Basic website structure'];
+    
+    // 如果是继续请求，尝试从上下文中获取更多信息
+    if (isContinueRequest && context) {
+      taskDescription = 'Continue working on existing project based on previous context';
+      keyFeatures = ['Continue previous work', 'Use existing project files'];
+    }
     
     return {
       id: crypto.randomUUID(),
@@ -140,7 +154,7 @@ Please reply "confirm" to proceed, or let me know if you need to make any change
         scope: 'small',
         complexity: 'simple',
         techStack: ['HTML', 'CSS', 'JavaScript'],
-        keyFeatures: [isModifyRequest ? 'Modify existing project' : 'Basic website structure'],
+        keyFeatures,
         potentialIssues: []
       },
       tasks: [

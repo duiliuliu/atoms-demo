@@ -1,0 +1,34 @@
+{
+  "projectId": "0a77ac3e-3988-4687-81ec-b412d7f94b6b",
+  "userId": "5b74be7b-103d-4862-9c32-fa75142c2ed6",
+  "name": "天气应用",
+  "createdAt": 1779323999174,
+  "updatedAt": 1779323999174,
+  "goal": "创建一个功能完整的天气展示应用",
+  "techStack": [],
+  "completedFeatures": [],
+  "inProgressFeatures": [],
+  "plannedFeatures": [],
+  "conversationHistory": [
+    {
+      "role": "user",
+      "content": "做一个天气展示应用",
+      "timestamp": 1779323999174
+    },
+    {
+      "role": "assistant",
+      "content": "好的，我来为你创建一个天气展示应用...",
+      "timestamp": 1779323999175
+    }
+  ],
+  "context": "",
+  "recentMemories": [
+    {
+      "content": "这是一个 Mock 响应。",
+      "timestamp": 1779323999174,
+      "round": 0
+    }
+  ],
+  "compressedMemories": [],
+  "conversationCount": 1
+}

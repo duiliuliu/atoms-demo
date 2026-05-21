@@ -76,7 +76,8 @@ export class IntentClassifier {
       patterns: [
         /(修改|更新|添加|删除|调整|改变|完善|优化|增强)/i,
         /(项目[一二三四五六七八九十\d]+|现有的|之前的|上一次的)/i,
-        /(header|页头|导航|菜单|按钮|表单|列表)/i
+        /(header|页头|导航|菜单|按钮|表单|列表)/i,
+        /(继续|完成|补充|接着|继续输出|继续做)/i
       ],
       requiresTaskBreakdown: true,
       requiresConfirmation: true
